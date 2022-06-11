@@ -16,6 +16,7 @@ repos:
   - id: requirements-txt-fixer
   - id: mixed-line-ending
     args: ['--fix=auto']  # replace 'auto' with 'lf' to enforce Linux/Mac line endings or 'crlf' for Windows
+  - id: no-commit-to-branch
 
 ## If you want to avoid flake8 errors due to unused vars or imports:
 # - repo: https://github.com/myint/autoflake
