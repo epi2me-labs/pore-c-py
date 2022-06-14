@@ -12,7 +12,7 @@ console = Console()
 
 
 @app.command()
-def digest(fasta: Path, enzyme: str, outfile: Path):
+def index(fasta: Path, enzyme: str, outfile: Path):
     idx_path = Path(str(fasta) + ".fai")
     if not idx_path.exists():
         faidx(str(fasta))

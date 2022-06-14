@@ -1,7 +1,7 @@
 from dataclasses import dataclass, field
 from itertools import count
 from pathlib import Path
-from typing import List
+from typing import Iterable, List
 
 import numpy as np
 import pandas as pd
@@ -20,6 +20,17 @@ class DigestFragment:
 
     def __post_init__(self):
         self.fragment_length = self.end - self.start
+
+    @staticmethod
+    def from_cuts(
+        chrom: str, chrom_length: int, positions: List[int], id_iter: Iterable[int]
+    ) -> List["DigestFragment"]:
+        return [
+            DigestFragment(chrom, start, end, frag_id)
+            for start, end, frag_id in zip(
+                [0] + positions, positions + [chrom_length], id_iter
+            )
+        ]
 
 
 class VirtualDigestSchema(pa.SchemaModel):

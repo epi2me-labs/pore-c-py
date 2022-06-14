@@ -27,26 +27,9 @@ def test_enzyme_digest(enzyme):
             find_cut_sites(enzyme, seq)
 
 
-@pytest.mark.parametrize("enzyme", ["EcoRI", "HindIII"])
-def test_fastq_digest(enzyme, tmp_path):
-    fasta = tmp_path / "genome.fa"
-    lengths = {"chr1": 1000, "chr2": 500}
-    expected = {"chr1": [10, 50], "chr2": [100]}
-    simulate_fasta_with_cut_sites(fasta, lengths, expected, enzyme=enzyme)
-    faidx(str(fasta))
-    observed = virtual_digest(enzyme, fasta)
-    expected = [
-        DigestFragment(*_)
-        for _ in [
-            ("chr1", 0, 10, 1),
-            ("chr1", 10, 50, 2),
-            ("chr1", 50, 1000, 3),
-            ("chr2", 0, 100, 4),
-            ("chr2", 100, 500, 5),
-        ]
-    ]
-
-    assert observed == expected
+def test_fastq_digest(scenario):
+    observed = virtual_digest(scenario.enzyme, scenario.reference_fasta)
+    assert observed == scenario.fragments
 
 
 def test_serde():
@@ -72,6 +55,6 @@ def test_digest_cli(runner, enzyme, tmp_path):
     expected = {"chr1": [10, 50], "chr2": [100]}
     simulate_fasta_with_cut_sites(fasta, lengths, expected, enzyme=enzyme)
     faidx(str(fasta))
-    result = runner.invoke(app, ["digest", str(fasta), enzyme, str(outfile)])
+    result = runner.invoke(app, ["index", str(fasta), enzyme, str(outfile)])
     print(result.stdout)
     assert result.exit_code == 0
