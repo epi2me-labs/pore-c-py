@@ -6,12 +6,11 @@ from typing import Dict, List, Optional, Tuple
 
 import numpy as np
 import numpy.typing as npt
-from loguru import logger
+import polars as pl
 from numpy.random import Generator, default_rng
-from pandera.typing import DataFrame
 from pysam import FastaFile
 
-from pore_c2.digest import DigestFragment, VirtualDigestSchema
+from pore_c2.digest import GenomicFragment
 
 
 def simulate_sequence_with_cut_sites(
@@ -26,7 +25,7 @@ def simulate_sequence_with_cut_sites(
 
     if random_state is None:
         random_state = default_rng()
-    enz = getattr(Restriction, enzyme, None)
+    enz = getattr(Restriction, enzyme)
     offset = enz.fst5
     length = len(enz.site)
     while True:
@@ -60,7 +59,7 @@ def simulate_fasta_with_cut_sites(
 
 
 def simulate_contact_prob_matrix(
-    fragments_df: DataFrame[VirtualDigestSchema], p_cis: float = 0.8
+    fragments_df, p_cis: float = 0.8
 ) -> npt.NDArray[np.float_]:
 
     p_trans = 1 - p_cis
@@ -71,10 +70,18 @@ def simulate_contact_prob_matrix(
     # set default value to probabilty of a trans conctact
     p = np.ones((n, n)) * p_trans
     for row in (
-        fragments_df.groupby("chrom").fragment_id.agg(["min", "max"]).itertuples()
+        fragments_df.groupby("chrom")
+        .agg(
+            [
+                pl.col("fragment_idx").min().alias("min"),
+                pl.col("fragment_idx").max().alias("max"),
+            ]
+        )
+        .rows()
     ):
+        _, min_idx, max_idx = row
         # set each cis block to probability cis (no length dependence)
-        p[row.min - 1 : row.max, row.min - 1 : row.max] = p_cis
+        p[min_idx - 1 : max_idx, min_idx - 1 : max_idx] = p_cis
     # no self-contacts
     np.fill_diagonal(p, 0)
     # renormalize
@@ -104,14 +111,14 @@ def simulate_concatemers(
             if next_frag not in path:
                 path.append(next_frag)
             n_iter += 1
-        concatemers.append([_ + 1 for _ in path])  # convert back to fragement ids
+        concatemers.append([_ for _ in path])  # store the dataframe index
     return concatemers
 
 
 def simulate_concatemer_fastqs(
     fastq: Path,
     reference_fasta: Path,
-    fragments_df: DataFrame[VirtualDigestSchema],
+    fragments_df: pl.DataFrame,
     p_cis: float = 0.8,
     num_concatemers: int = 100,
     mean_frags_per_concatemer: int = 5,
@@ -129,18 +136,21 @@ def simulate_concatemer_fastqs(
         1, max_frags_per_concatemer
     )
     concatemers = simulate_concatemers(p, sizes, random_state=random_state)
-    df = fragments_df.set_index("fragment_id")
-    ff = FastaFile(reference_fasta)
+    ff = FastaFile(str(reference_fasta))
     outfh = fastq.open("w")
     for idx, path in enumerate(concatemers):
         segments = []
-        for row in df.loc[path, ["chrom", "start", "end"]].itertuples(index=False):
-            segments.append(ff.fetch(row.chrom, row.start, row.end))
+        id = []
+        for row in fragments_df[
+            pl.Series(path), ["chrom", "start", "end", "fragment_id"]
+        ].rows():
+            id.append(row[3])
+            segments.append(ff.fetch(row[0], row[1], row[2]))
         seq = "".join(segments)
-        id = "_".join(map(str, path))
+        fragment_str = f"fragments={','.join(id)}"
         qual = "5" * len(seq)
-        outfh.write(f"@CMER{idx}:{id}\n{seq}\n+\n{qual}\n")
-        logger.debug(seq)
+        outfh.write(f"@CMER{idx} {fragment_str}\n{seq}\n+\n{qual}\n")
+        # logger.debug(seq)
 
 
 @dataclass
@@ -151,10 +161,9 @@ class Scenario:
     random_state: np.random.Generator = field(
         default_factory=lambda: np.random.default_rng()
     )
-
     cut_sites: Dict[str, List[int]] = field(init=False)
-    fragments: List[DigestFragment] = field(init=False)
-    fragments_df: DataFrame[VirtualDigestSchema] = field(init=False)
+    fragments: List[GenomicFragment] = field(init=False)
+    fragments_df: pl.DataFrame = field(init=False)
     temp_path: Path = field(default_factory=lambda: Path(mkdtemp()))
 
     def __post_init__(self):
@@ -170,9 +179,9 @@ class Scenario:
                 )
             )
             self.fragments.extend(
-                DigestFragment.from_cuts(chrom, length, self.cut_sites[chrom], id_iter)
+                GenomicFragment.from_cuts(chrom, length, self.cut_sites[chrom], id_iter)
             )
-        self.fragments_df = DataFrame[VirtualDigestSchema](self.fragments)
+        self.fragments_df = GenomicFragment.to_dataframe(self.fragments)
 
     @property
     def reference_fasta(self):

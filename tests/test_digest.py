@@ -1,50 +1,40 @@
 import pytest
-from loguru import logger
-from pandera.typing import DataFrame
 from pysam import faidx
 
 from pore_c2.cli import app
-from pore_c2.digest import (
-    DigestFragment,
-    VirtualDigestSchema,
-    find_cut_sites,
-    virtual_digest,
-)
+from pore_c2.digest import _get_cut_sites, _get_enzyme, digest_fastq, digest_genome
 from pore_c2.testing import (
     simulate_fasta_with_cut_sites,
     simulate_sequence_with_cut_sites,
 )
 
 
-@pytest.mark.parametrize("enzyme", ["EcoRI", "HindIII", "AloI"])
-def test_enzyme_digest(enzyme):
-    true_pos, seq = simulate_sequence_with_cut_sites(enzyme)
-    if enzyme != "AloI":
-        positions = find_cut_sites(enzyme, seq)
+@pytest.mark.parametrize("enzyme_id", ["EcoRI", "HindIII", "AloI"])
+def test_enzyme_digest(enzyme_id):
+    true_pos, seq = simulate_sequence_with_cut_sites(enzyme_id)
+    if enzyme_id != "AloI":
+        enzyme = _get_enzyme(enzyme_id)
+        positions = _get_cut_sites(enzyme, seq)
         assert true_pos == positions
     else:
         with pytest.raises(NotImplementedError):
-            find_cut_sites(enzyme, seq)
+            enzyme = _get_enzyme(enzyme_id)
+            _get_cut_sites(enzyme, seq)
 
 
-def test_fastq_digest(scenario):
-    observed = virtual_digest(scenario.enzyme, scenario.reference_fasta)
-    assert observed == scenario.fragments
+def test_digest_genome(scenario, tmp_path):
+    frag_table = tmp_path / "fragments.pq"
+    res = digest_genome(scenario.enzyme, scenario.reference_fasta, frag_table)
+    assert res.shape == scenario.fragments_df.shape
 
 
-def test_serde():
-    expected = [
-        DigestFragment(*_)
-        for _ in [
-            ("chr1", 0, 10, 1),
-            ("chr1", 10, 50, 2),
-            ("chr1", 50, 1000, 3),
-            ("chr2", 0, 100, 4),
-            ("chr2", 100, 500, 5),
-        ]
-    ]
-    df = DataFrame[VirtualDigestSchema](expected)
-    logger.debug(df)
+def test_digest_fastq(scenario, tmp_path):
+    output_fastq = tmp_path / "read_fragments.fastq"
+    res = digest_fastq(
+        scenario.enzyme, scenario.concatemer_fastq, output_fastq, return_dataframe=True
+    )
+    print(res)
+    # TODO: check that the fragments match the expectation
 
 
 @pytest.mark.parametrize("enzyme", ["EcoRI", "HindIII"])
@@ -56,5 +46,4 @@ def test_digest_cli(runner, enzyme, tmp_path):
     simulate_fasta_with_cut_sites(fasta, lengths, expected, enzyme=enzyme)
     faidx(str(fasta))
     result = runner.invoke(app, ["index", str(fasta), enzyme, str(outfile)])
-    print(result.stdout)
     assert result.exit_code == 0

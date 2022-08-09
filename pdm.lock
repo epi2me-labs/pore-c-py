@@ -331,7 +331,7 @@ summary = "Module for decorators, wrappers and monkey patching."
 
 [metadata]
 lock_version = "4.0"
-content_hash = "sha256:4d9aa3382d6ee26aff8b36cc07d76da8e283bb5b56265a3981d3f75ab7f6139a"
+content_hash = "sha256:0ed97af32370219c3162a78eb22ebaf3a84d622e81eb6fbdd1e958f194a411bd"
 
 [metadata.files]
 "atomicwrites 1.4.1" = [
