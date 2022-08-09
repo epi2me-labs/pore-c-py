@@ -8,7 +8,7 @@ console = Console()
 
 
 @app.command()
-def digest(reference_fasta: Path):
+def index(reference_fasta: Path, enzyme: str):
     raise NotImplementedError
 
 
@@ -19,16 +19,6 @@ def map():
 
 @app.command()
 def merge():
-    raise NotImplementedError
-
-
-@app.command()
-def haplotag():
-    raise NotImplementedError
-
-
-@app.command()
-def to_cooler():
     raise NotImplementedError
 
 

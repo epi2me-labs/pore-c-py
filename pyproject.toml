@@ -89,3 +89,33 @@ enable_error_code = ["ignore-without-code", "redundant-expr", "truthy-bool"]
 [[tool.mypy.overrides]]
 module = []
 ignore_missing_imports = true
+
+[[tool.coverage.run]]
+branch = true
+source = "pore_c2"
+# omit = bad_file.py
+
+[[tool.coverage.paths]]
+source =[
+    "src/",
+    "*/site-packages/"
+]
+
+[[tool.coverage.report]]
+# Regexes for lines to exclude from consideration
+exclude_lines = [
+    # Have to re-enable the standard pragma
+    "pragma: no cover",
+
+    # Don't complain about missing debug-only code:
+    "def __repr__",
+    "if self.debug",
+
+    # Don't complain if tests don't hit defensive assertion code:
+    "raise AssertionError",
+    "raise NotImplementedError",
+
+    # Don't complain if non-runnable code isn't run:
+    "if 0:",
+    "if __name__ == .__main__.:",
+]
