@@ -1,12 +1,51 @@
-[build-system]
-# AVOID CHANGING REQUIRES: IT WILL BE UPDATED BY PYSCAFFOLD!
-requires = ["setuptools>=46.1.0", "setuptools_scm[toml]>=5", "wheel"]
-build-backend = "setuptools.build_meta"
+[project]
+name = "pore-c2"
+version = "0.1.0"
+description = ""
+authors = [
+    {name = "Eoghan Harrington", email = "eoghan.harrington@nanoporetech.com"},
+]
+dependencies = [
+    "typer>=0.6.1",
+    "loguru>=0.6.0",
+    "pysam>=0.19.1",
+    "mappy>=2.24",
+    "biopython>=1.79",
+    "pandas>=1.4.3",
+    "polars>=0.13.62",
+    "rich>=12.5.1",
+]
+requires-python = ">=3.8"
+license = {text = "MIT"}
 
-[tool.setuptools_scm]
-# For smarter version schemes and other configuration options,
-# check out https://github.com/pypa/setuptools_scm
-version_scheme = "no-guess-dev"
+[project.optional-dependencies]
+
+
+[project.scripts]
+pore-c2 = "pore_c2.cli:app"
+
+[build-system]
+requires = ["pdm-pep517>=1.0.0"]
+build-backend = "pdm.pep517.api"
+
+
+[tool.pdm]
+[tool.pdm.dev-dependencies]
+dev = [
+    "pytest<8.0.0,>=7.1.2",
+    "pytest-xdist<3.0.0,>=2.5.0",
+    "pytest-cov>=3.0.0",
+    "pytest-watch>=4.2.0",
+]
+
+[tool.pdm.scripts]
+test = "pytest"
+testw = "pytest --looponfail"
+cli = "pore-c2"
+
+[tool.pdm.build]
+includes = []
+
 
 
 [tool.commitizen]
@@ -16,15 +55,37 @@ version_files = [
     "src/__version__.py",
     "pyproject.toml:version"
 ]
-style = [
-    ["qmark", "fg:#ff9d00 bold"],
-    ["question", "bold"],
-    ["answer", "fg:#ff9d00 bold"],
-    ["pointer", "fg:#ff9d00 bold"],
-    ["highlighted", "fg:#ff9d00 bold"],
-    ["selected", "fg:#cc5454"],
-    ["separator", "fg:#cc5454"],
-    ["instruction", ""],
-    ["text", ""],
-    ["disabled", "fg:#858585 italic"]
+
+
+[tool.pytest]
+testpaths=['tests']
+norecursedirs = ["dist", "build", ".tox", ".cache", ".venv"]
+doctest_optionflags = ["NORMALIZE_WHITESPACE", "IGNORE_EXCEPTION_DETAIL"]
+looponfailroots=["tests","src"]
+
+[tool.isort]
+profile = "black"
+known_first_party = "aws_interfacing"
+
+[tool.pyright]
+include = ["src"]
+exclude = [
+    "**/__pycache__",
+    ".venv"
 ]
+venvPath = "./."
+venv = ".venv"
+extraPaths = ["./.venv"]
+reportMissingImports = true
+reportMissingTypeStubs = false
+
+
+[tool.mypy]
+files = ["src"]
+show_error_codes = true
+strict = true
+enable_error_code = ["ignore-without-code", "redundant-expr", "truthy-bool"]
+
+[[tool.mypy.overrides]]
+module = []
+ignore_missing_imports = true
