@@ -1,39 +1,45 @@
-from collections import namedtuple
 from pathlib import Path
-from typing import Dict, NamedTuple
+from typing import Dict, List, Optional, Tuple
 
-from attrs import define, field
+from attrs import define, fields
 
 
 @define
-class PrefixedFileCollection:
-    prefix: Path
-    suffixes: Dict[str, str]
-    p: NamedTuple = field(init=False)
+class FileCollection:
+    _path_attrs: List[str]
 
-    def __attrs_post_init__(self):
-        nt = namedtuple("PrefixedPaths", list(self.suffixes.keys()))
-        p = nt(
-            **{key: self.prefix.with_suffix(val) for key, val in self.suffixes.items()}
-        )
-        self.p = p
+    @classmethod
+    def with_prefix(cls, prefix: Path, drop: Optional[List[str]] = None):
+        path_attrs = []
+        kwds = {}
+        for f in fields(cls):
+            if f.name.startswith("_"):
+                continue
+            if drop and f.name in drop:
+                kwds[f.name] = None
+            else:
+                kwds[f.name] = Path(str(f.default).format(prefix=str(prefix)))
+            path_attrs.append(f.name)
+
+        return cls(path_attrs=path_attrs, **kwds)
 
     def __iter__(self):
-        for key in self.suffixes:
-            yield getattr(self.p, key)
+        for a in self._path_attrs:
+            yield getattr(self, a)
 
-    def exists_all(self):
-        for path in self.p:
-            if path is None:
-                continue
-            if not path.exists():
+    def items(self) -> List[Tuple[str, Optional[Path]]]:
+        return [(a, getattr(self, a)) for a in self._path_attrs]
+
+    def existing(self) -> Dict[str, Path]:
+        return {
+            key: val for key, val in self.items() if val is not None and val.exists()
+        }
+
+    def exists_any(self) -> bool:
+        return len(self.existing()) > 0
+
+    def exists_all(self) -> bool:
+        for p in self:
+            if p is not None and not p.exists():
                 return False
         return True
-
-    def exists_any(self):
-        for path in self.p:
-            if path is None:
-                continue
-            if path.exists():
-                return True
-        return False
