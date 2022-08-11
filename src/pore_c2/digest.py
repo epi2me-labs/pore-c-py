@@ -149,6 +149,7 @@ def sequence_to_genomic_fragments(
 
 
 def digest_genome(
+    *,
     enzyme_id: str,
     fasta: Path,
     bed_file: Optional[Path] = None,
@@ -182,7 +183,7 @@ def digest_genome(
 
 
 def digest_fastq(
-    enzyme_id: str, fastq: Path, fastq_out: Path, return_dataframe: bool = False
+    *, enzyme_id: str, fastq: Path, fastq_out: Path, return_dataframe: bool = False
 ):
     ff = FastxFile(str(fastq))
     outfh = fastq_out.open("w")
