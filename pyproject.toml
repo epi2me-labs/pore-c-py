@@ -21,6 +21,12 @@ requires-python = ">=3.8"
 license = {text = "MIT"}
 
 [project.optional-dependencies]
+jupyter = [
+    "jupyterlab>=3.4.5",
+    "jupyterlab-code-formatter>=1.5.3",
+    "jupyterlab-lsp>=3.10.1",
+    "jupytext>=1.14.1",
+]
 
 
 [project.scripts]
@@ -44,6 +50,7 @@ dev = [
 test = "pytest"
 testw = "pytest --looponfail"
 cli = "pore-c2"
+jupyter= "jupyter lab"
 
 [tool.pdm.build]
 includes = []
