@@ -94,6 +94,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "cattrs"
+version = "22.1.0"
+requires_python = ">=3.7,<4.0"
+summary = "Composable complex class support for attrs and dataclasses."
+dependencies = [
+    "attrs>=20",
+    "exceptiongroup; python_version <= \"3.10\"",
+]
+
+[[package]]
 name = "certifi"
 version = "2022.6.15"
 requires_python = ">=3.6"
@@ -178,6 +188,12 @@ name = "entrypoints"
 version = "0.4"
 requires_python = ">=3.6"
 summary = "Discover and load entry points from installed packages."
+
+[[package]]
+name = "exceptiongroup"
+version = "1.0.0rc8"
+requires_python = ">=3.7"
+summary = "Backport of PEP 654 (exception groups)"
 
 [[package]]
 name = "execnet"
@@ -1067,7 +1083,7 @@ summary = "Backport of pathlib-compatible object wrapper for zip files"
 
 [metadata]
 lock_version = "4.0"
-content_hash = "sha256:504aa4863d124286a912369756eb3aa6499cb1d217e3738a2fc52c849c4bd141"
+content_hash = "sha256:57d728397cf664ecc4fa98fd7e4bbc0a087a67b575b4c579ff4d0bf3bb66fb61"
 
 [metadata.files]
 "anyio 3.6.1" = [
@@ -1159,6 +1175,10 @@ content_hash = "sha256:504aa4863d124286a912369756eb3aa6499cb1d217e3738a2fc52c849
 "bleach 5.0.1" = [
     {url = "https://files.pythonhosted.org/packages/c2/5d/d5d45a38163ede3342d6ac1ca01b5d387329daadf534a25718f9a9ba818c/bleach-5.0.1.tar.gz", hash = "sha256:0d03255c47eb9bd2f26aa9bb7f2107732e7e8fe195ca2f64709fcf3b0a4a085c"},
     {url = "https://files.pythonhosted.org/packages/d4/87/508104336a2bc0c4cfdbdceedc0f44dc72da3abc0460c57e323ddd1b3257/bleach-5.0.1-py3-none-any.whl", hash = "sha256:085f7f33c15bd408dd9b17a4ad77c577db66d76203e5984b1bd59baeee948b2a"},
+]
+"cattrs 22.1.0" = [
+    {url = "https://files.pythonhosted.org/packages/f7/06/9d81ad262e0146c0f2e94c6c450f6c4c490ce2e4711f30e546bb04883b62/cattrs-22.1.0.tar.gz", hash = "sha256:94b67b64cf92c994f8784c40c082177dc916e0489a73a9a36b24eb18a9db40c6"},
+    {url = "https://files.pythonhosted.org/packages/ff/02/bea6883c7f7bdc1cbc535ffe711952f3dfa073be58fb8082bc857341b11c/cattrs-22.1.0-py3-none-any.whl", hash = "sha256:d55c477b4672f93606e992049f15d526dc7867e6c756cd6256d4af92e2b1e364"},
 ]
 "certifi 2022.6.15" = [
     {url = "https://files.pythonhosted.org/packages/cc/85/319a8a684e8ac6d87a1193090e06b6bbb302717496380e225ee10487c888/certifi-2022.6.15.tar.gz", hash = "sha256:84c85a9078b11105f04f3036a9482ae10e4621616db313fe045dd24743a0820d"},
@@ -1323,6 +1343,10 @@ content_hash = "sha256:504aa4863d124286a912369756eb3aa6499cb1d217e3738a2fc52c849
 "entrypoints 0.4" = [
     {url = "https://files.pythonhosted.org/packages/35/a8/365059bbcd4572cbc41de17fd5b682be5868b218c3c5479071865cab9078/entrypoints-0.4-py3-none-any.whl", hash = "sha256:f174b5ff827504fd3cd97cc3f8649f3693f51538c7e4bdf3ef002c8429d42f9f"},
     {url = "https://files.pythonhosted.org/packages/ea/8d/a7121ffe5f402dc015277d2d31eb82d2187334503a011c18f2e78ecbb9b2/entrypoints-0.4.tar.gz", hash = "sha256:b706eddaa9218a19ebcd67b56818f05bb27589b1ca9e8d797b74affad4ccacd4"},
+]
+"exceptiongroup 1.0.0rc8" = [
+    {url = "https://files.pythonhosted.org/packages/94/e0/2f58a7e00e28cd57f8239bd8d16963c2810142af58028cf5b0681ed9fdfd/exceptiongroup-1.0.0rc8.tar.gz", hash = "sha256:6990c24f06b8d33c8065cfe43e5e8a4bfa384e0358be036af9cc60b6321bd11a"},
+    {url = "https://files.pythonhosted.org/packages/9a/8e/21e73923dabbf1b4bb36bc1c0f8f6da5c7d6becd0902213dbefa386ca8dc/exceptiongroup-1.0.0rc8-py3-none-any.whl", hash = "sha256:ab0a968e1ef769e55d9a596f4a89f7be9ffedbc9fdefdb77cc68cf5c33ce1035"},
 ]
 "execnet 1.9.0" = [
     {url = "https://files.pythonhosted.org/packages/7a/3c/b5ac9fc61e1e559ced3e40bf5b518a4142536b34eb274aa50dff29cb89f5/execnet-1.9.0.tar.gz", hash = "sha256:8f694f3ba9cc92cab508b152dcfe322153975c29bda272e2fd7f3f00f36e47c5"},

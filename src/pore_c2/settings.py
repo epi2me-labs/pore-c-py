@@ -1,1 +1,1 @@
-MINIMAP2_PRESET = "ont"
+MINIMAP2_SETTINGS = {"preset": "ont"}

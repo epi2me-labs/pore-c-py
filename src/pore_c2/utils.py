@@ -12,7 +12,7 @@ class FileCollection:
     def with_prefix(cls, prefix: Path, drop: Optional[List[str]] = None):
         path_attrs = []
         kwds = {}
-        for f in fields(cls):
+        for f in fields(cls):  # pyright: ignore
             if f.name.startswith("_"):
                 continue
             if drop and f.name in drop:
@@ -21,7 +21,9 @@ class FileCollection:
                 kwds[f.name] = Path(str(f.default).format(prefix=str(prefix)))
             path_attrs.append(f.name)
 
-        return cls(path_attrs=path_attrs, **kwds)
+        return cls(
+            path_attrs=path_attrs, **kwds  # pyright: ignore [reportGeneralTypeIssues]
+        )
 
     def __iter__(self):
         for a in self._path_attrs:

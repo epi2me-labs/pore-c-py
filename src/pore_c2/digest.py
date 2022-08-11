@@ -5,7 +5,11 @@ from typing import Any, Dict, Iterable, List, Optional, TextIO, Tuple
 import polars as pl
 from attrs import Factory, asdict, define, field, frozen
 from Bio.Seq import Seq
-from pysam import FastaFile, FastqProxy, FastxFile
+from pysam import (  # pyright: reportGeneralTypeIssue=false
+    FastaFile,
+    FastxFile,
+    FastxRecord,
+)
 
 
 @frozen
@@ -76,7 +80,7 @@ class ReadFragment:
             f":{self.read_fragment_idx}_{self.total_read_fragments}"
         )
 
-    def slice_fastq(self, read: FastqProxy) -> Tuple[str, str]:
+    def slice_fastq(self, read: FastxRecord) -> Tuple[str, str]:
         seq = read.sequence[self.read_start : self.read_end]
         qual = read.quality[self.read_start : self.read_end]
         return (seq, qual)
@@ -113,7 +117,7 @@ def _get_cut_intervals(enzyme, seq: str) -> Tuple[List[int], List[int]]:
     return starts, ends
 
 
-def sequence_to_read_fragments(enzyme, read: FastqProxy) -> List[ReadFragment]:
+def sequence_to_read_fragments(enzyme, read: FastxRecord) -> List[ReadFragment]:
     starts, ends = _get_cut_intervals(enzyme, read.sequence)
     num_fragments = len(starts)
     read_fragments = [
@@ -143,7 +147,7 @@ def sequence_to_genomic_fragments(
             composition=SeqComposition.from_seq(frag_seq),
         )
         if fasta_fh:
-            fasta_fh.write(">{frag.fragment_id}\n{frag_seq}\n")
+            fasta_fh.write(f">{frag.fragment_id}\n{frag_seq}\n")
         res.append(frag)
     return res
 
@@ -172,8 +176,8 @@ def digest_genome(
 
     df = (
         GenomicFragment.to_dataframe(fragments)
-        .drop("fragment_id")
-        .with_row_count(name="fragment_id", offset=1)
+        .drop("fragment_idx")
+        .with_row_count(name="fragment_idx", offset=1)
     )
     if bed_file:
         df.select(["chrom", "start", "end", "fragment_id"]).write_csv(

@@ -1,11 +1,14 @@
 from dataclasses import dataclass
+from pathlib import Path
 from typing import List
 
 import pytest
-from pysam import AlignedSegment, FastxFile
+from pysam import AlignedSegment
 
 from pore_c2.cli import app
-from pore_c2.digest import _get_enzyme, sequence_to_read_fragments
+from pore_c2.index import create_index
+from pore_c2.map import map_concatemers
+from pore_c2.testing import Scenario
 
 
 @dataclass
@@ -21,25 +24,22 @@ class ConcatemerAlignData:
         )
 
 
-def test_mappy(scenario):
-    import mappy as mp
+def test_mappy(scenario: Scenario, tmp_path):
 
-    a = mp.Aligner(str(scenario.reference_fasta), preset="map-ont")
-    enzyme = _get_enzyme(scenario.enzyme)
-    for rec in FastxFile(scenario.concatemer_fastq):
-        for read_frag in sequence_to_read_fragments(enzyme, rec):
-            seq, _ = read_frag.slice_fastq(rec)
-            for hit in a.map(seq):
-                if not hit.is_primary:
-                    continue
-                # print(
-                #    read_frag.read_fragment_id,
-                #    hit.ctg,
-                #    hit.r_st,
-                #    hit.r_en,
-                #    hit.q_st,
-                #    hit.q_en,
-                # )
+    index_files = create_index(
+        fasta=scenario.reference_fasta,
+        enzyme=scenario.enzyme,
+        prefix=Path(tmp_path / "index"),
+    )
+    index_metadata = index_files.load_metadata()
+
+    map_concatemers(
+        enzyme=index_metadata.enzyme,
+        fastq=scenario.concatemer_fastq,
+        mmi=index_files.mmi,
+        minimap_settings=index_metadata.mappy_settings,
+    )
+    raise ValueError(index_files)
 
 
 @pytest.mark.skip
