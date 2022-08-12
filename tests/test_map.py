@@ -1,27 +1,11 @@
-from dataclasses import dataclass
 from pathlib import Path
-from typing import List
 
 import pytest
-from pysam import AlignedSegment
 
 from pore_c2.cli import app
 from pore_c2.index import create_index
 from pore_c2.map import map_concatemers
 from pore_c2.testing import Scenario
-
-
-@dataclass
-class ConcatemerAlignData:
-    read_name: str
-
-    raw_alignments: List[AlignedSegment]
-
-    def __repr__(self):
-        return (
-            f"<ConcatemerAligns read={self.read_name} "
-            f"raw_aligns={len(self.raw_alignments)}>"
-        )
 
 
 def test_mappy(scenario: Scenario, tmp_path):
