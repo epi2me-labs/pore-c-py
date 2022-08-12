@@ -3,13 +3,10 @@ from pore_c2.testing import Scenario
 
 
 def test_load(scenario: Scenario):
-
-    o = FragmentOverlapper.from_dataframe(scenario.fragments_df)
-    print(o)
+    _ = FragmentOverlapper.from_dataframe(scenario.fragments_df)
 
 
 def test_overlapper():
-
     overlapper = FragmentOverlapper(
         left={"chr1": [0, 10, 20]}, ids={"chr1": ["f01", "f02", "f03"]}
     )
@@ -34,4 +31,4 @@ def test_overlapper():
         4,
         40.0,
     )  # second junction, 4 base to the left of it, 40% of the fragment
-    print(overlapper.overlaps("chr1", 0, 19))
+    # print(overlapper.overlaps("chr1", 0, 19))

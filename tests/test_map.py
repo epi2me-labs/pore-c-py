@@ -1,9 +1,11 @@
 from pathlib import Path
 
 import pytest
+from pysam import AlignmentHeader
 
 from pore_c2.cli import app
 from pore_c2.index import create_index
+from pore_c2.io import MappingFileCollection, MapWriter
 from pore_c2.map import map_concatemers
 from pore_c2.testing import Scenario
 
@@ -17,18 +19,34 @@ def test_mappy(scenario: Scenario, tmp_path):
     )
     index_metadata = index_files.load_metadata()
 
+    prefix = tmp_path / "map_results"
+    map_fc = MappingFileCollection.with_prefix(prefix)
+
+    header = AlignmentHeader.from_references(
+        index_metadata.chrom_order,
+        [index_metadata.chrom_lengths[c] for c in index_metadata.chrom_order],
+    )
+
+    writer = MapWriter(
+        fc=map_fc,
+        sam_header=header,
+        reference_filename=Path(index_metadata.reference_path),
+    )
+
     map_concatemers(
         enzyme=index_metadata.enzyme,
         fastq=scenario.concatemer_fastq,
         mmi=index_files.mmi,
         minimap_settings=index_metadata.mappy_settings,
         fragment_pq=index_files.fragments,
+        writer=writer,
     )
+    writer.close()
 
 
 @pytest.mark.skip
 def test_map_cli(runner, scenario, tmp_path):
-    outfile = tmp_path / "results.pq"
+    prefix = tmp_path / "map_results"
     result = runner.invoke(
         app,
         [
@@ -36,7 +54,7 @@ def test_map_cli(runner, scenario, tmp_path):
             str(scenario.concatemer_fastq),
             scenario.enzyme,
             scenario.reference_fasta,
-            str(outfile),
+            prefix,
         ],
     )
     assert result.exit_code == 0
