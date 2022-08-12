@@ -22,6 +22,7 @@ def test_mappy(scenario: Scenario, tmp_path):
         fastq=scenario.concatemer_fastq,
         mmi=index_files.mmi,
         minimap_settings=index_metadata.mappy_settings,
+        fragment_pq=index_files.fragments,
     )
     raise ValueError(index_files)
 

@@ -27,6 +27,10 @@ jupyter = [
     "jupyterlab-code-formatter>=1.5.3",
     "jupyterlab-lsp>=3.10.1",
     "jupytext>=1.14.1",
+    "line-profiler>=3.5.1",
+    "memory-profiler>=0.60.0",
+    "black>=22.6.0",
+    "isort>=5.10.1",
 ]
 
 
