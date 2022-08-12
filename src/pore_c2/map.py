@@ -7,14 +7,6 @@ from pysam import FastxFile, FastxRecord
 
 from .digest import ReadFragment, _get_enzyme, sequence_to_read_fragments
 from .overlaps import FragmentOverlapper, OverlapStats
-from .utils import FileCollection
-
-
-@define
-class MappingFileCollection(FileCollection):
-    bam: Path = Path("{prefix}.bam")
-    concatemers: Path = Path("{prefix}.concatemers.parquet")
-    contacts: Path = Path("{prefix}.contacts.parquet")
 
 
 @define(kw_only=True)
@@ -56,10 +48,10 @@ def map_concatemers(
     aligner = mp.Aligner(fn_idx_in=str(mmi), **minimap_settings)
     enzyme = _get_enzyme(enzyme)
     for rec in FastxFile(str(fastq)):
-        c_align_data = split_and_map_read(
+        _ = split_and_map_read(
             aligner=aligner, rec=rec, enzyme=enzyme, overlapper=overlapper
         )
-        print(c_align_data)
+        # print(c_align_data)
         # print(
         #    read_frag.read_fragment_id,
         #    hit.ctg,

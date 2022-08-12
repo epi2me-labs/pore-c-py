@@ -5,7 +5,10 @@ from typing import Dict, List, Tuple
 import numpy as np
 import polars as pl
 from attrs import define
-from loguru import logger
+
+from .log import get_logger
+
+logger = get_logger()
 
 
 @define(kw_only=True)
@@ -54,6 +57,7 @@ class FragmentOverlapper:
 
     def snap(self, chrom: str, coord: int) -> Tuple[int, int, float]:
         """Snap a coordinate to the closest junction"""
+        # TODO: more comments
         idx = bisect_right(self.left[chrom], coord)
         try:
             f_start, f_end = self.left[chrom][idx - 1], self.left[chrom][idx]

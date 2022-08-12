@@ -4,14 +4,16 @@ from typing import Any, Dict, List, Optional
 import mappy
 from attrs import define
 from cattr.preconf.json import make_converter
-from loguru import logger
 from pysam import FastaFile, faidx  # pyright: ignore
 
 from pore_c2 import __version__
 
 from .digest import _get_enzyme, digest_genome
+from .log import get_logger
 from .settings import MINIMAP2_SETTINGS
 from .utils import FileCollection
+
+logger = get_logger()
 
 
 @define(kw_only=True)
