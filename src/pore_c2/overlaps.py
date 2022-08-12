@@ -83,7 +83,7 @@ class FragmentOverlapper:
         span = end_idx - start_idx
         return OverlapStats(
             num_frags=span,
-            frag_ids=ids,
+            frag_ids=ids,  # pyright: ignore
             start_frag=self.ids[chrom][start_idx],
             start_offset=start_offset,
             start_offset_perc=start_offset_perc,

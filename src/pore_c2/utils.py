@@ -89,7 +89,7 @@ class SamFlags:
     @classmethod
     def from_int(cls, val: int):
         kwds = {}
-        for key, _ in fields_dict(cls).items():
+        for key, _ in fields_dict(cls).items():  # pyright: ignore
             kwds[key] = (val & SamEnum[key].value) > 0
         return cls(**kwds)
 

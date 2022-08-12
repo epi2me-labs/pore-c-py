@@ -27,7 +27,7 @@ def test_file_collection(tmp_path):
 
 def test_sam_flags():
 
-    for key, _ in fields_dict(SamFlags).items():
+    for key, _ in fields_dict(SamFlags).items():  # pyright: ignore
         for tf in (True, False):
             flags = SamFlags(**{key: tf})
             assert getattr(flags, key) == tf

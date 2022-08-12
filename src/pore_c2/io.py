@@ -3,7 +3,7 @@ from typing import TYPE_CHECKING, List
 
 from attrs import Factory, define, field
 from pysam import AlignedSegment, AlignmentFile, AlignmentHeader
-from pysam import sort as sort_bam
+from pysam import sort as sort_bam  # pyright: ignore
 
 from .log import get_logger
 from .utils import FileCollection
