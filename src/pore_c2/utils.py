@@ -1,7 +1,8 @@
+import enum
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
-from attrs import define, fields
+from attrs import asdict, define, fields, fields_dict
 
 
 @define
@@ -45,3 +46,53 @@ class FileCollection:
             if p is not None and not p.exists():
                 return False
         return True
+
+
+@enum.unique
+class SamEnum(enum.IntFlag):
+    paired = 1
+    proper_pair = 2
+    unmap = 4
+    munmap = 8
+    reverse = 16
+    mreverse = 32
+    read1 = 64
+    read2 = 128
+    secondary = 256
+    qcfail = 512
+    dup = 1024
+    supplementary = 2048
+
+
+@define(kw_only=True)
+class SamFlags:
+    paired: bool = False
+    proper_pair: bool = False
+    unmap: bool = False
+    munmap: bool = False
+    reverse: bool = False
+    mreverse: bool = False
+    read1: bool = False
+    read2: bool = False
+    secondary: bool = False
+    qcfail: bool = False
+    dup: bool = False
+    supplementary: bool = False
+
+    def to_int(self):
+        res = 0
+        for key, val in asdict(self).items():
+            if val is True:
+                res = res | SamEnum[key].value
+        return res
+
+    @classmethod
+    def from_int(cls, val: int):
+        kwds = {}
+        for key, _ in fields_dict(cls).items():
+            kwds[key] = (val & SamEnum[key].value) > 0
+        return cls(**kwds)
+
+    @property
+    def primary(self):
+        return not (self.secondary | self.supplementary)
