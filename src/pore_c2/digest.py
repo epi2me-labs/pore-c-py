@@ -1,15 +1,54 @@
+from abc import ABCMeta, abstractmethod
 from collections import Counter
 from pathlib import Path
-from typing import Any, Dict, Iterable, List, Optional, TextIO, Tuple
+from typing import Any, Dict, Iterable, List, Optional, TextIO, Tuple, Union
 
 import polars as pl
 from attrs import Factory, asdict, define, field, frozen
 from Bio.Seq import Seq
-from pysam import (  # pyright: reportGeneralTypeIssue=false
-    FastaFile,
-    FastxFile,
-    FastxRecord,
-)
+from pysam import FastaFile, FastxRecord  # pyright: reportGeneralTypeIssue=false
+
+from .reads import Read
+
+
+class Cutter(metaclass=ABCMeta):
+    @abstractmethod
+    def get_cut_sites(self, seq: str) -> List[int]:
+        ...
+
+    def get_cut_intervals(self, seq: str) -> Tuple[List[int], List[int]]:
+        sites = self.get_cut_sites(seq)
+        seq_len = len(seq)
+        if not sites:
+            return [0], [seq_len]
+        if sites[-1] == seq_len:
+            sites = sites[:-1]
+        starts = sites
+        if starts[0] != 0:
+            starts.insert(0, 0)
+        ends = starts[1:] + [len(seq)]
+        return starts, ends
+
+
+class EnzymeCutter(Cutter):
+    def __init__(self, enzyme: Any):
+        self.enzyme = enzyme
+
+    @classmethod
+    def from_name(cls, enzyme_id: str):
+        from Bio import Restriction
+
+        enz = getattr(Restriction, enzyme_id, None)
+        if enz is None:
+            raise ValueError(f"Enzyme not found: {enzyme_id}")
+        if enz.cut_twice():
+            raise NotImplementedError(
+                f"Enzyme cuts twice, not currently supported: {enzyme_id}"
+            )
+        return cls(enz)
+
+    def get_cut_sites(self, seq: str) -> List[int]:
+        return [_ - 1 for _ in self.enzyme.search(Seq(seq))]
 
 
 @frozen
@@ -73,6 +112,7 @@ class ReadFragment:
     read_id: str
     read_fragment_idx: int
     total_read_fragments: int
+    sequence: Optional[str] = None
 
     def __attrs_post_init__(self):
         self.read_fragment_id = (
@@ -80,45 +120,16 @@ class ReadFragment:
             f":{self.read_fragment_idx}_{self.total_read_fragments}"
         )
 
-    def slice_fastq(self, read: FastxRecord) -> Tuple[str, str]:
+    def slice_fastq(self, read: Union[Read, FastxRecord]) -> Tuple[str, str]:
         seq = read.sequence[self.read_start : self.read_end]
         qual = read.quality[self.read_start : self.read_end]
         return (seq, qual)
 
 
-def _get_enzyme(enzyme_id: str):
-    from Bio import Restriction
-
-    enz = getattr(Restriction, enzyme_id, None)
-    if enz is None:
-        raise ValueError(f"Enzyme not found: {enzyme_id}")
-    if enz.cut_twice():
-        raise NotImplementedError(
-            f"Enzyme cuts twice, not currently supported: {enzyme_id}"
-        )
-    return enz
-
-
-def _get_cut_sites(enzyme, seq: str) -> List[int]:
-    return [_ - 1 for _ in enzyme.search(Seq(seq))]
-
-
-def _get_cut_intervals(enzyme, seq: str) -> Tuple[List[int], List[int]]:
-    sites = _get_cut_sites(enzyme, seq)
-    seq_len = len(seq)
-    if not sites:
-        return [0], [seq_len]
-    if sites[-1] == seq_len:
-        sites = sites[:-1]
-    starts = sites
-    if starts[0] != 0:
-        starts.insert(0, 0)
-    ends = starts[1:] + [len(seq)]
-    return starts, ends
-
-
-def sequence_to_read_fragments(enzyme, read: FastxRecord) -> List[ReadFragment]:
-    starts, ends = _get_cut_intervals(enzyme, read.sequence)
+def sequence_to_read_fragments(
+    cutter: Cutter, read: Union[Read, FastxRecord], store_sequence: bool = True
+) -> List[ReadFragment]:
+    starts, ends = cutter.get_cut_intervals(read.sequence)
     num_fragments = len(starts)
     read_fragments = [
         ReadFragment(
@@ -127,6 +138,7 @@ def sequence_to_read_fragments(enzyme, read: FastxRecord) -> List[ReadFragment]:
             read_end=end,
             read_fragment_idx=x,
             total_read_fragments=num_fragments,
+            sequence=read.sequence[start:end] if store_sequence else None,
         )
         for x, (start, end) in enumerate(zip(starts, ends))
     ]
@@ -134,9 +146,9 @@ def sequence_to_read_fragments(enzyme, read: FastxRecord) -> List[ReadFragment]:
 
 
 def sequence_to_genomic_fragments(
-    enzyme, seq: str, chrom: str, fasta_fh: Optional[TextIO]
+    cutter: Cutter, seq: str, chrom: str, fasta_fh: Optional[TextIO]
 ) -> List[GenomicFragment]:
-    starts, ends = _get_cut_intervals(enzyme, seq)
+    starts, ends = cutter.get_cut_intervals(seq)
     res = []
     for _, (start, end) in enumerate(zip(starts, ends)):
         frag_seq = seq[start:end]
@@ -154,12 +166,11 @@ def sequence_to_genomic_fragments(
 
 def digest_genome(
     *,
-    enzyme_id: str,
+    cutter: Cutter,
     fasta: Path,
     bed_file: Optional[Path] = None,
     fasta_out: Optional[Path] = None,
-):
-    enzyme = _get_enzyme(enzyme_id)
+) -> pl.DataFrame:
 
     if fasta_out:
         fasta_fh = fasta_out.open("w")
@@ -171,7 +182,7 @@ def digest_genome(
     for chrom in ff.references:
         seq = ff.fetch(chrom)  # , 0, 100_000)
         fragments.extend(
-            sequence_to_genomic_fragments(enzyme, seq, chrom, fasta_fh=fasta_fh)
+            sequence_to_genomic_fragments(cutter, seq, chrom, fasta_fh=fasta_fh)
         )
 
     df = (
@@ -187,20 +198,23 @@ def digest_genome(
 
 
 def digest_fastq(
-    *, enzyme_id: str, fastq: Path, fastq_out: Path, return_dataframe: bool = False
-):
-    ff = FastxFile(str(fastq))
+    *,
+    cutter: Cutter,
+    read_iter: Iterable[Union[Read, FastxRecord]],
+    fastq_out: Path,
+    return_dataframe: bool = False,
+) -> Optional[pl.DataFrame]:
     outfh = fastq_out.open("w")
-
-    enzyme = _get_enzyme(enzyme_id)
     data = []
-    for read in ff:
-        read_frags = sequence_to_read_fragments(enzyme, read)
+    for read in read_iter:
+        read_frags = sequence_to_read_fragments(cutter, read)
         if return_dataframe:
             data.extend(read_frags)
         for frag in read_frags:
             seq, qual = frag.slice_fastq(read)
-            outfh.write(f"@{frag.read_fragment_id}\n{seq}\n+\n{qual}\n")
+            outfh.write(
+                f"@{frag.read_fragment_id} MI:Z:{read.name}\n{seq}\n+\n{qual}\n"
+            )
     outfh.close()
 
     if return_dataframe:

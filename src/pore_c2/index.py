@@ -8,7 +8,7 @@ from pysam import FastaFile, faidx  # pyright: ignore
 
 from pore_c2 import __version__
 
-from .digest import _get_enzyme, digest_genome
+from .digest import EnzymeCutter, digest_genome
 from .log import get_logger
 from .settings import MINIMAP2_SETTINGS
 from .utils import FileCollection
@@ -48,7 +48,7 @@ def create_index(
     *, fasta: Path, enzyme: str, prefix: Optional[Path] = None, force: bool = False
 ) -> IndexFileCollection:
     try:
-        _ = _get_enzyme(enzyme)
+        cutter = EnzymeCutter.from_name(enzyme)
     except Exception:
         logger.error(f"Error loading enzyme {enzyme}", exc_info=True)
         raise
@@ -65,7 +65,7 @@ def create_index(
         logger.info(f"Creating a .fai for {fasta}")
         faidx(str(fasta))
     df = digest_genome(
-        enzyme_id=enzyme,
+        cutter=cutter,
         fasta=fasta,
         bed_file=index_files.bed,
         fasta_out=index_files.fasta,

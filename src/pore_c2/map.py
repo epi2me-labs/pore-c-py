@@ -1,13 +1,11 @@
-from pathlib import Path
-from typing import Any, Dict, List
+from typing import List, Optional, Tuple
 
 import mappy as mp
 from attr import Factory, define
-from pysam import FastxFile, FastxRecord
 
-from .digest import ReadFragment, _get_enzyme, sequence_to_read_fragments
-from .io import MapWriter
+from .digest import Cutter, ReadFragment, sequence_to_read_fragments
 from .overlaps import FragmentOverlapper, OverlapStats
+from .reads import Read
 
 
 @define(kw_only=True)
@@ -83,44 +81,44 @@ class ConcatemerAlignData:
 
 
 def split_and_map_read(
-    *, aligner: mp.Aligner, rec: FastxRecord, enzyme, overlapper: FragmentOverlapper
+    *,
+    aligner: mp.Aligner,
+    read: Read,
+    cutter: Cutter,
+    overlapper: FragmentOverlapper,
+    thread_buf: Optional[mp.ThreadBuffer] = None,
 ) -> ConcatemerAlignData:
     aligns = []
-    for read_frag in sequence_to_read_fragments(enzyme, rec):
-        seq, _ = read_frag.slice_fastq(rec)
+    for read_frag in sequence_to_read_fragments(cutter, read):
+        seq, _ = read_frag.slice_fastq(read)
         hits = list(aligner.map(seq))
         overlaps = [overlapper.overlaps(h.ctg, h.r_st, h.r_en) for h in hits]
         aligns.append(
             ReadFragmentAligns(read_fragment=read_frag, aligns=hits, overlaps=overlaps)
         )
     return ConcatemerAlignData(
-        read_id=rec.name, aligns=aligns, seq=rec.sequence, qual=rec.quality
+        read_id=read.name, aligns=aligns, seq=read.sequence, qual=read.quality
     )
 
 
-def map_concatemers(
+def map_concatemer_read(
     *,
-    enzyme: str,
-    fastq: Path,
-    mmi: Path,
-    minimap_settings: Dict[Any, Any],
-    fragment_pq: Path,
-    writer: MapWriter,
-):
-    overlapper = FragmentOverlapper.from_parquet(fragment_pq)
-    aligner = mp.Aligner(fn_idx_in=str(mmi), **minimap_settings)
-    enzyme = _get_enzyme(enzyme)
-    for rec in FastxFile(str(fastq)):
-        c_align_data = split_and_map_read(
-            aligner=aligner, rec=rec, enzyme=enzyme, overlapper=overlapper
-        )
-        writer(c_align_data)
-        # print(c_align_data)
-        # print(
-        #    read_frag.read_fragment_id,
-        #    hit.ctg,
-        #    hit.r_st,
-        #    hit.r_en,
-        #    hit.q_st,
-        #    hit.q_en,
-        # )
+    aligner: mp.Aligner,
+    read: Read,
+    cutter: Cutter,
+    thread_buf: Optional[mp.ThreadBuffer] = None,
+) -> Tuple[Read, List[ReadFragment], List[mp.Alignment]]:
+    read_frags = sequence_to_read_fragments(cutter, read, store_sequence=False)
+    hits = [
+        list(aligner.map(read.sequence[_.read_start : _.read_end], buf=thread_buf))
+        for _ in read_frags
+    ]
+    return (read, read_frags, hits)
+
+
+def merge_colinear(c_align_data: ConcatemerAlignData) -> ConcatemerAlignData:
+    return c_align_data
+
+
+def pick_optimal(c_align_data: ConcatemerAlignData) -> ConcatemerAlignData:
+    return c_align_data

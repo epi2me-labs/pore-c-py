@@ -1,12 +1,15 @@
 from pathlib import Path
 
+import mappy as mp
 import pytest
 from pysam import AlignmentHeader
 
 from pore_c2.cli import app
+from pore_c2.digest import EnzymeCutter
 from pore_c2.index import create_index
-from pore_c2.io import MappingFileCollection, MapWriter
-from pore_c2.map import map_concatemers
+from pore_c2.io import MappingFileCollection
+from pore_c2.multiprocessing import MappyThreadPool
+from pore_c2.reads import get_reads
 from pore_c2.testing import Scenario
 
 
@@ -27,21 +30,34 @@ def test_mappy(scenario: Scenario, tmp_path):
         [index_metadata.chrom_lengths[c] for c in index_metadata.chrom_order],
     )
 
-    writer = MapWriter(
-        fc=map_fc,
-        sam_header=header,
-        reference_filename=Path(index_metadata.reference_path),
+    read_stream = get_reads(scenario.concatemer_fastq)
+    aligner = mp.Aligner(fn_idx_in=str(index_files.mmi))
+    cutter = EnzymeCutter.from_name(index_metadata.enzyme)
+
+    mapping_stream = MappyThreadPool(
+        read_iter=read_stream, aligner=aligner, cutter=cutter, n_threads=1
     )
 
-    map_concatemers(
-        enzyme=index_metadata.enzyme,
-        fastq=scenario.concatemer_fastq,
-        mmi=index_files.mmi,
-        minimap_settings=index_metadata.mappy_settings,
-        fragment_pq=index_files.fragments,
-        writer=writer,
-    )
-    writer.close()
+    for align in mapping_stream:
+        print(align)
+
+    mapping_stream.join()
+
+    # writer = MapWriter(
+    #    fc=map_fc,
+    #    sam_header=header,
+    #    reference_filename=Path(index_metadata.reference_path),
+    # )
+
+    # map_concatemers(
+    #    enzyme=index_metadata.enzyme,
+    #    fastq=scenario.concatemer_fastq,
+    #    mmi=index_files.mmi,
+    #    minimap_settings=index_metadata.mappy_settings,
+    #    fragment_pq=index_files.fragments,
+    #    writer=writer,
+    # )
+    # writer.close()
 
 
 @pytest.mark.skip
