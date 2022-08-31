@@ -1,14 +1,58 @@
 from abc import ABCMeta, abstractmethod
 from collections import Counter
 from pathlib import Path
-from typing import Any, Dict, Iterable, List, Optional, TextIO, Tuple, Union
+from typing import Any, Dict, Iterable, List, Optional, TextIO, Tuple
 
 import polars as pl
 from attrs import Factory, asdict, define, field, frozen
 from Bio.Seq import Seq
-from pysam import FastaFile, FastxRecord  # pyright: reportGeneralTypeIssue=false
+from pysam import AlignmentHeader, FastaFile
 
-from .reads import Read
+from .io import ReadIter, ReadWriter
+from .model import AlignData
+
+
+def digest_read(cutter: "Cutter", align: AlignData) -> List["AlignData"]:
+    positions = cutter.get_cut_sites(align.seq)
+    return align.split(positions)
+
+
+def get_reads(paths: Iterable[Path]) -> Iterable[AlignData]:
+    for p in paths:
+        reader = ReadIter.load(p)
+        for read in reader:
+            yield read
+
+
+def find_files(
+    root: Path, glob: str = "*.fastq", recursive: bool = True
+) -> Iterable[Path]:
+
+    if not root.is_dir():
+        yield root
+    else:
+        if recursive and not glob.startswith("**/"):
+            glob = f"**/{glob}"
+        for f in root.glob(glob):
+            yield (f)
+
+
+def find_reads(root: Path, glob: str = "*.fastq", recursive: bool = True):
+
+    if root.is_dir():
+        files = find_files(root, glob=glob, recursive=recursive)
+    else:
+        files = (root,)
+
+    for f in files:
+
+        print(f)
+
+
+def get_writer(
+    path: Path, align_header: Optional[AlignmentHeader] = None
+) -> ReadWriter:
+    return ReadWriter.load(path, header=align_header)
 
 
 class Cutter(metaclass=ABCMeta):
@@ -96,11 +140,20 @@ class GenomicFragment:
     def from_cuts(
         chrom: str, chrom_length: int, positions: List[int], id_iter: Iterable[int]
     ) -> List["GenomicFragment"]:
+        start_zero = positions[0] == 0
+        end_length = positions[-1] == chrom_length
+        if start_zero and end_length:
+            p = positions
+        elif start_zero:
+            p = positions + [chrom_length]
+        elif end_length:
+            p = [0] + positions
+        else:
+            p = [0] + positions + [chrom_length]
+
         return [
             GenomicFragment(chrom=chrom, start=start, end=end, fragment_idx=frag_id)
-            for start, end, frag_id in zip(
-                [0] + positions, positions + [chrom_length], id_iter
-            )
+            for start, end, frag_id in zip(p[0:-1], p[1:], id_iter)
         ]
 
 
@@ -120,16 +173,16 @@ class ReadFragment:
             f":{self.read_fragment_idx}_{self.total_read_fragments}"
         )
 
-    def slice_fastq(self, read: Union[Read, FastxRecord]) -> Tuple[str, str]:
-        seq = read.sequence[self.read_start : self.read_end]
-        qual = read.quality[self.read_start : self.read_end]
+    def slice_fastq(self, read: AlignData) -> Tuple[str, str]:
+        seq = read.seq[self.read_start : self.read_end]
+        qual = read.qual[self.read_start : self.read_end]
         return (seq, qual)
 
 
 def sequence_to_read_fragments(
-    cutter: Cutter, read: Union[Read, FastxRecord], store_sequence: bool = True
+    cutter: Cutter, read: AlignData, store_sequence: bool = True
 ) -> List[ReadFragment]:
-    starts, ends = cutter.get_cut_intervals(read.sequence)
+    starts, ends = cutter.get_cut_intervals(read.seq)
     num_fragments = len(starts)
     read_fragments = [
         ReadFragment(
@@ -138,7 +191,7 @@ def sequence_to_read_fragments(
             read_end=end,
             read_fragment_idx=x,
             total_read_fragments=num_fragments,
-            sequence=read.sequence[start:end] if store_sequence else None,
+            sequence=read.seq[start:end] if store_sequence else None,
         )
         for x, (start, end) in enumerate(zip(starts, ends))
     ]
@@ -195,29 +248,3 @@ def digest_genome(
             bed_file, has_header=False, sep="\t"
         )
     return df
-
-
-def digest_fastq(
-    *,
-    cutter: Cutter,
-    read_iter: Iterable[Union[Read, FastxRecord]],
-    fastq_out: Path,
-    return_dataframe: bool = False,
-) -> Optional[pl.DataFrame]:
-    outfh = fastq_out.open("w")
-    data = []
-    for read in read_iter:
-        read_frags = sequence_to_read_fragments(cutter, read)
-        if return_dataframe:
-            data.extend(read_frags)
-        for frag in read_frags:
-            seq, qual = frag.slice_fastq(read)
-            outfh.write(
-                f"@{frag.read_fragment_id} MI:Z:{read.name}\n{seq}\n+\n{qual}\n"
-            )
-    outfh.close()
-
-    if return_dataframe:
-        return pl.DataFrame([asdict(_) for _ in data], orient="row")
-    else:
-        return None

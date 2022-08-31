@@ -1,27 +1,14 @@
 from pathlib import Path
 from threading import Thread
-from typing import TYPE_CHECKING, Any, Iterator, List
+from typing import Any, Iterator, List
 
-from attrs import define
 from pysam import AlignedSegment, AlignmentFile, AlignmentHeader
 from pysam import sort as sort_bam  # pyright: ignore
 
-from .log import get_logger
-from .utils import FileCollection
+from ..align import MappingFileCollection
+from ..log import get_logger
 
 logger = get_logger()
-
-if TYPE_CHECKING:
-    from .map import ConcatemerAlignData
-
-
-@define
-class MappingFileCollection(FileCollection):
-    bam: Path = Path("{prefix}.bam")
-    temp_bam: Path = Path("{prefix}.temp.bam")
-    concatemers: Path = Path("{prefix}.concatemers.parquet")
-    contacts: Path = Path("{prefix}.contacts.parquet")
-    unmapped: Path = Path("{prefix}.unmapped.fastq")
 
 
 class MapWriter(Thread):
@@ -39,7 +26,7 @@ class MapWriter(Thread):
         self.sam_header = sam_header
         self.reference_filename = reference_filename
         self.batch_size = batch_size
-        self._cache: List["ConcatemerAlignData"] = []
+        self._cache: List[Any] = []
         self.af = AlignmentFile(
             str(self.fc.temp_bam),
             "wb",
@@ -51,7 +38,7 @@ class MapWriter(Thread):
         for item in self.result_iter:
             self(item)
 
-    def __call__(self, rec: "ConcatemerAlignData"):
+    def __call__(self, rec):
         self._cache.append(rec)
         if len(self._cache) > self.batch_size:
             self.flush()

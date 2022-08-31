@@ -56,3 +56,4 @@ MANIFEST
 tmp_tests
 .pdm.toml
 scratch
+.pymon

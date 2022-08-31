@@ -8,9 +8,9 @@ import numpy as np
 import numpy.typing as npt
 import polars as pl
 from numpy.random import Generator, default_rng
-from pysam import FastaFile
+from pysam import FastaFile, VariantFile, VariantHeader, tabix_compress, tabix_index
 
-from pore_c2.digest import GenomicFragment
+from pore_c2.monomers import GenomicFragment
 
 
 def simulate_sequence_with_cut_sites(
@@ -56,6 +56,109 @@ def simulate_fasta_with_cut_sites(
         fh.write(f">{chrom}\n{seq}\n")
     fh.close()
     return fasta
+
+
+def simulate_haplotypes(
+    reference_fasta: Path,
+    num_haplotypes: int = 3,
+    var_density: float = 0.01,
+    random_state: Optional[Generator] = None,
+) -> pl.DataFrame:
+    if random_state is None:
+        random_state = default_rng()
+
+    ff = FastaFile(str(reference_fasta))
+    mutations = {}
+    bases = list("ATGC")
+    for b in bases:
+        mutations[b] = [_ for _ in bases if _ != "b"]
+
+    df = None
+    for chrom in ff.references:
+        length = ff.get_reference_length(chrom)
+        num_vars = max(2, int(np.rint(length * var_density)))
+        snp_positions = sorted(
+            random_state.choice(int(length), size=num_vars, replace=False)
+        )
+        # assume bi-allelic
+        ref_allele = [ff.fetch(chrom, _, _ + 1) for _ in snp_positions]
+        alt_allele = [random_state.choice(mutations[_], 1)[0] for _ in ref_allele]
+        # matrix of
+        haplotypes = random_state.choice([0, 1], size=(num_vars, num_haplotypes))
+        _df = (
+            pl.DataFrame(
+                {
+                    **{
+                        "chrom": [chrom] * num_vars,
+                        "pos": snp_positions,
+                        "ref": ref_allele,
+                        "alt": alt_allele,
+                    },
+                    **{f"HT{x}": haplotypes[:, x] for x in range(num_haplotypes)},
+                }
+            )
+            .melt(
+                id_vars=["chrom", "pos", "ref", "alt"],
+                variable_name="haplotype_id",
+                value_name="allele_idx",
+            )
+            .with_column(
+                pl.when(pl.col("allele_idx") == 0)
+                .then(pl.col("ref"))
+                .otherwise(pl.col("alt"))
+                .alias("allele_value")
+            )
+        )
+        if df is None:
+            df = _df
+        else:
+            df = df.vstack(_df)
+    assert df is not None
+    return df
+
+
+def create_phased_vcf(haplotype_df: pl.DataFrame, vcf: Path, reference_fasta: Path):
+
+    if vcf.suffixes[-1] == ".gz":
+        uncomp_vcf = vcf.with_suffix("".join(vcf.suffixes[:-1]))
+        comp_vcf = vcf
+    else:
+        comp_vcf = Path(str(vcf) + ".gz")
+        uncomp_vcf = vcf
+
+    ff = FastaFile(str(reference_fasta))
+    header = VariantHeader()
+    header.add_line(f"##reference=file:///{reference_fasta.resolve()}")
+    for chrom in ff.references:
+        header.add_line(
+            f"##contig=<ID={chrom},length={ff.get_reference_length(chrom)}>"
+        )
+    header.add_line('##FORMAT=<ID=GT,Number=1,Type=String,Description="Genotype">')
+    header.add_line('##FORMAT=<ID=PS,Number=1,Type=Integer,Description="Phase Set">')
+    header.add_line(
+        '##FORMAT=<ID=PQ,Number=1,Type=Integer,Description="Phasing Quality">'
+    )
+    header.add_sample("SAMPLE_01")
+    vcf_out = VariantFile(str(uncomp_vcf), "w", header=header)
+    vcf_out.close()
+
+    with uncomp_vcf.open("a") as fh:
+        for (chrom, pos, ref, alt, gt0, gt1) in haplotype_df.rows():
+            # record = vcf_out.new_record(
+            #    contig=chrom,
+            #    start=pos,
+            #    stop=pos,
+            #    alleles=[ref, alt],
+            #    samples={"SAMPLE_01": ""
+            # )
+            # vcf_out.write(record)
+            fh.write(
+                f"{chrom}\t{pos}\t.\t{ref}\t{alt}\t.\tPASS\t.\tGT:PS\t{gt0}|{gt1}:0\n"
+            )
+    tabix_compress(str(uncomp_vcf), str(comp_vcf))
+    tabix_index(str(comp_vcf), preset="vcf")
+    uncomp_vcf.unlink()
+    return comp_vcf
 
 
 def simulate_contact_prob_matrix(
@@ -115,6 +218,29 @@ def simulate_concatemers(
     return concatemers
 
 
+def simulate_read_sequence(
+    *,
+    ff: FastaFile,
+    chrom: str,
+    start: int,
+    end: int,
+    offsets: Optional[List[int]] = None,
+    allele_values: Optional[List[str]] = None,
+):
+    seq = ff.fetch(chrom, start, end)
+    snps = []
+    if offsets is not None:
+        assert allele_values is not None
+        s = list(seq)
+        assert len(offsets) == len(allele_values)
+        for x, a in zip(offsets, allele_values):
+            if seq[x] != a:
+                snps.append(x)
+                s[x] = a
+        seq = "".join(s)
+    return seq, snps
+
+
 def simulate_concatemer_fastqs(
     fastq: Path,
     reference_fasta: Path,
@@ -123,6 +249,8 @@ def simulate_concatemer_fastqs(
     num_concatemers: int = 100,
     mean_frags_per_concatemer: int = 5,
     max_frags_per_concatemer: int = 50,
+    haplotype_df: Optional[pl.DataFrame] = None,
+    num_haplotypes: int = 0,
     random_state: Optional[Generator] = None,
 ):
     if random_state is None:
@@ -136,21 +264,99 @@ def simulate_concatemer_fastqs(
         1, max_frags_per_concatemer
     )
     concatemers = simulate_concatemers(p, sizes, random_state=random_state)
+    if num_haplotypes > 0:
+        assert haplotype_df is not None
+        snps = (
+            haplotype_df.join_asof(
+                (
+                    fragments_df.select(
+                        ["chrom", "start", "end", "fragment_id"]
+                    ).with_column(pl.col("start").alias("asof_end"))
+                ),
+                by="chrom",
+                left_on="pos",
+                right_on="asof_end",
+            )
+            .filter(pl.col("pos") >= pl.col("start"))
+            .with_column((pl.col("pos") - pl.col("start")).alias("offset"))
+            .with_column(pl.concat_list(["ref", "alt"]).alias("alleles"))
+            # .with_column(pl.col("alleles").take(pl.col("HT.0")).alias("test"))
+            .groupby(
+                ["chrom", "start", "end", "fragment_id", "haplotype_id"],
+                maintain_order=True,
+            )
+            .agg(
+                [
+                    # pl.count().alias("num_vars"),
+                    pl.col("allele_value"),
+                    pl.col("offset"),
+                ]
+            )
+        )
+        haplotypes = random_state.integers(0, num_haplotypes, size=len(concatemers))
+    else:
+        snps = None
+        haplotypes = [None] * len(concatemers)
+
     ff = FastaFile(str(reference_fasta))
     outfh = fastq.open("w")
-    for idx, path in enumerate(concatemers):
+    data = []
+    for idx, (path, haplotype) in enumerate(zip(concatemers, haplotypes)):
         segments = []
         id = []
-        for row in fragments_df[
+
+        frag_locs = fragments_df[
             pl.Series(path), ["chrom", "start", "end", "fragment_id"]
-        ].rows():
-            id.append(row[3])
-            segments.append(ff.fetch(row[0], row[1], row[2]))
+        ]
+        if snps:
+            frag_locs = frag_locs.join(
+                snps.filter(pl.col("haplotype_id") == f"HT{haplotype}"),
+                on=["chrom", "start", "end", "fragment_id"],
+                how="left",
+            ).sort(["fragment_id"])
+        else:
+            frag_locs = frag_locs.with_columns(
+                [
+                    pl.lit(None).alias("haplotype_id"),
+                    pl.lit(None).alias("allele_value"),
+                    pl.lit(None).alias("offset"),
+                ]
+            )
+            # snps = frag_locs.join_asof(
+            #    haplotype_df.with_column(pl.col("pos").alias("loc")),
+            #    by="chrom",
+            #    left_on="start",
+            #    right_on="pos",
+            # ).filter(pl.col("loc") <= pl.col("end"))
+
+            # raise ValueError(snps)
+        for (
+            chrom,
+            start,
+            end,
+            fragment_id,
+            _,  # haplotype_id
+            allele_value,
+            offset,
+        ) in frag_locs.rows():
+            id.append(fragment_id)
+            _seq, _ = simulate_read_sequence(
+                ff=ff,
+                chrom=chrom,
+                start=start,
+                end=end,
+                offsets=offset,
+                allele_values=allele_value,
+            )
+            segments.append(_seq)
+
         seq = "".join(segments)
         fragment_str = f"fragments={','.join(id)}"
         qual = "5" * len(seq)
         outfh.write(f"@CMER{idx} {fragment_str}\n{seq}\n+\n{qual}\n")
+        data.append({"concatemer_id": f"CMER{idx}", "num_segments": len(segments)})
         # logger.debug(seq)
+    return pl.DataFrame(data, orient="row")
 
 
 @dataclass
@@ -165,6 +371,9 @@ class Scenario:
     fragments: List[GenomicFragment] = field(init=False)
     fragments_df: pl.DataFrame = field(init=False)
     temp_path: Path = field(default_factory=lambda: Path(mkdtemp()))
+    num_concatemers: int = 100
+    num_haplotypes: int = 0
+    variant_density: float = 0.0
 
     def __post_init__(self):
         self.cut_sites = {}
@@ -182,6 +391,21 @@ class Scenario:
                 GenomicFragment.from_cuts(chrom, length, self.cut_sites[chrom], id_iter)
             )
         self.fragments_df = GenomicFragment.to_dataframe(self.fragments)
+        if self.num_haplotypes > 0:
+            self.haplotype_df = simulate_haplotypes(
+                self.reference_fasta, self.num_haplotypes, self.variant_density
+            )
+        else:
+            self.haplotype_df = None
+
+    @property
+    def phased_vcf(self):
+        vcf = self.temp_path / "genotypes.vcf.gz"
+        if self.haplotype_df is None:
+            raise ValueError
+        if not vcf.exists():
+            create_phased_vcf(self.haplotype_df, vcf, self.reference_fasta)
+        return vcf
 
     @property
     def reference_fasta(self):
@@ -197,14 +421,21 @@ class Scenario:
         return fasta
 
     @property
+    def ff(self):
+        return FastaFile(str(self.reference_fasta))
+
+    @property
     def concatemer_fastq(self):
         fastq = self.temp_path / "concatemers.fastq"
         if not fastq.exists():
-            simulate_concatemer_fastqs(
+            self.concatemer_metadata = simulate_concatemer_fastqs(
                 fastq,
                 self.reference_fasta,
                 self.fragments_df,
+                haplotype_df=self.haplotype_df,
+                num_haplotypes=self.num_haplotypes,
                 random_state=self.random_state,
+                num_concatemers=self.num_concatemers,
             )
         return fastq
 
