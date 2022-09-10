@@ -1,6 +1,8 @@
 import mappy as mp
 import pytest
 
+from pore_c2.aligns import group_aligns_by_concatemers
+from pore_c2.model import AlignData
 from pore_c2.testing import Scenario, simulate_read_sequence
 
 
@@ -48,3 +50,27 @@ def test_mappy_snvs(
     assert hit.r_st == start
     assert hit.cigar_str == cigar
     assert hit.NM == NM
+
+
+def test_group_aligns():
+    num_concatemers, aligns_per_concatemer = 2, 10
+    aligns = [
+        AlignData(
+            name=f"CONCAT{y}:{x}",
+            seq="AATGC",
+            ref_name=f"chrom{x+1}",
+            ref_pos=10,
+            tags=[f"MI:Z:CONCAT{y}"],
+        )
+        for y in range(num_concatemers)
+        for x in range(aligns_per_concatemer)
+    ]
+    concatemer_ids = set()
+    for concat_id, monomers in group_aligns_by_concatemers(aligns):
+        assert len(list(monomers)) == aligns_per_concatemer
+        concatemer_ids.add(concat_id)
+    assert len(concatemer_ids) == num_concatemers
+    shuffled = sorted(aligns, key=lambda x: x.ref_name)
+    with pytest.raises(ValueError):
+        for concat_id, aligns in group_aligns_by_concatemers(shuffled):
+            pass

@@ -1,5 +1,6 @@
+from itertools import groupby
 from pathlib import Path
-from typing import List, Optional, Tuple
+from typing import Iterable, List, Optional, Tuple
 
 import mappy as mp
 from attrs import define
@@ -19,6 +20,25 @@ class MappingFileCollection(FileCollection):
     concatemers: Path = Path("{prefix}.concatemers.parquet")
     contacts: Path = Path("{prefix}.contacts.parquet")
     unmapped: Path = Path("{prefix}.unmapped.fastq")
+
+
+def get_concatemer_id(align: AlignData) -> str:
+    # TODO: use the MI tag for this
+    return align.name.split(":", 1)[0]
+
+
+def group_aligns_by_concatemers(
+    aligns: Iterable[AlignData],
+) -> Iterable[Tuple[str, List[AlignData]]]:
+    seen = set()
+    for concat_id, aligns in groupby(aligns, get_concatemer_id):
+        if concat_id in seen:
+            raise ValueError(
+                f"Concatemer {concat_id} has already been seen, "
+                "these alignments should be sorted by MI tag"
+            )
+        yield (concat_id, list(aligns))
+        seen.add(concat_id)
 
 
 def map_concatemer_read(
