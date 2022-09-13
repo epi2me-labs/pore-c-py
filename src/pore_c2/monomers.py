@@ -140,16 +140,19 @@ class GenomicFragment:
     def from_cuts(
         chrom: str, chrom_length: int, positions: List[int], id_iter: Iterable[int]
     ) -> List["GenomicFragment"]:
-        start_zero = positions[0] == 0
-        end_length = positions[-1] == chrom_length
-        if start_zero and end_length:
-            p = positions
-        elif start_zero:
-            p = positions + [chrom_length]
-        elif end_length:
-            p = [0] + positions
+        if len(positions) == 0:
+            p = [0, chrom_length]
         else:
-            p = [0] + positions + [chrom_length]
+            start_zero = positions[0] == 0
+            end_length = positions[-1] == chrom_length
+            if start_zero and end_length:
+                p = positions
+            elif start_zero:
+                p = positions + [chrom_length]
+            elif end_length:
+                p = [0] + positions
+            else:
+                p = [0] + positions + [chrom_length]
 
         return [
             GenomicFragment(chrom=chrom, start=start, end=end, fragment_idx=frag_id)
