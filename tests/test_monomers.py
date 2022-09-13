@@ -31,13 +31,6 @@ def mock_reads() -> Dict[str, AlignData]:
     return {r.name: r for r in reads}
 
 
-# pytest-monitor is disabled by default, to enable to specific
-# tests mark with @pytest.mark.monitor_test
-pytestmark = [
-    pytest.mark.monitor_skip_test,
-]
-
-
 @pytest.mark.parametrize("enzyme_id", ["EcoRI", "HindIII", "AloI"])
 def test_enzyme_digest(enzyme_id):
     true_pos, seq = simulate_sequence_with_cut_sites(enzyme_id)

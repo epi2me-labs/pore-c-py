@@ -64,10 +64,11 @@ dev = [
 ]
 
 [tool.pdm.scripts]
-test = "pytest -p no:pytest-workflow"
+test = "pytest --no-monitor -p no:pytest-workflow "
+test_perf = "pytest -p no:pytest-workflow"
 test_wf.cmd = "pytest -p pytest-workflow -p no:pytest-monitor --tag stepwise --git-aware  --kwd tests/workflow/"
 test_wf.env = { PYTEST_DISABLE_PLUGIN_AUTOLOAD = "1" }
-testw = "pytest --looponfail"
+testw = "pytest --looponfail -p no:pytest-workflow "
 cli = "pore-c2"
 jupyter = "jupyter lab"
 
