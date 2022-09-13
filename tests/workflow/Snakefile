@@ -1,0 +1,11 @@
+
+rule all:
+    input:
+        "test.txt",
+
+
+rule echo:
+    output:
+        "test.txt",
+    shell:
+        "echo TEST > {output}"

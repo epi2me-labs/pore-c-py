@@ -1,0 +1,8 @@
+- name: stepwise
+  command: snakemake --cores 1  --snakefile tests/workflow/Snakefile
+  tags:
+    - stepwise
+  files:
+    - path: "test.txt"
+      contains:
+        - "TEST"

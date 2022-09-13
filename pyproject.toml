@@ -3,37 +3,41 @@ name = "pore-c2"
 version = "0.1.0"
 description = ""
 authors = [
-    {name = "Eoghan Harrington", email = "eoghan.harrington@nanoporetech.com"},
+  { name = "Eoghan Harrington", email = "eoghan.harrington@nanoporetech.com" },
 ]
 dependencies = [
-    "typer>=0.6.1",
-    "pysam>=0.19.1",
-    "mappy>=2.24",
-    "biopython>=1.79",
-    "pandas>=1.4.3",
-    "polars>=0.13.62",
-    "rich>=12.5.1",
-    "attrs>=22.1.0",
-    "cattrs>=22.1.0",
-    "dask[distributed]>=2022.8.0",
-    "streamz>=0.6.4",
+  "typer>=0.6.1",
+  "pysam>=0.19.1",
+  "mappy>=2.24",
+  "biopython>=1.79",
+  "pandas>=1.4.3",
+  "polars>=0.13.62",
+  "rich>=12.5.1",
+  "attrs>=22.1.0",
+  "cattrs>=22.1.0",
+  "dask[distributed]>=2022.8.0",
+  "streamz>=0.6.4",
+  "pytest-monitor>=1.6.4",
 ]
 requires-python = ">=3.8"
-license = {text = "MIT"}
+license = { text = "MIT" }
 
 [project.optional-dependencies]
 jupyter = [
-    "jupyterlab>=3.4.5",
-    "jupyterlab-code-formatter>=1.5.3",
-    "jupyterlab-lsp>=3.10.1",
-    "jupytext>=1.14.1",
-    "line-profiler>=3.5.1",
-    "memory-profiler>=0.60.0",
-    "black>=22.6.0",
-    "isort>=5.10.1",
+  "jupyterlab>=3.4.5",
+  "jupyterlab-code-formatter>=1.5.3",
+  "jupyterlab-lsp>=3.10.1",
+  "jupytext>=1.14.1",
+  "line-profiler>=3.5.1",
+  "memory-profiler>=0.60.0",
+  "black>=22.6.0",
+  "isort>=5.10.1",
 ]
-debug = [
-    "debugpy>=1.6.3",
+debug = ["debugpy>=1.6.3"]
+test_snakemake = [
+  "snakemake>=7.14.0",
+  "pytest>=7.1.3",
+  "pytest-workflow>=1.6.0",
 ]
 
 
@@ -48,41 +52,41 @@ build-backend = "pdm.pep517.api"
 [tool.pdm]
 [tool.pdm.dev-dependencies]
 dev = [
-    "pytest<8.0.0,>=7.1.2",
-    "pytest-xdist<3.0.0,>=2.5.0",
-    "pytest-cov>=3.0.0",
-    "pytest-watch>=4.2.0",
-    "yappi>=1.3.6",
-    "futureproof>=0.3.1",
-    "pytest-monitor>=1.6.4",
+  "pytest<8.0.0,>=7.1.2",
+  "pytest-xdist<3.0.0,>=2.5.0",
+  "pytest-cov>=3.0.0",
+  "pytest-watch>=4.2.0",
+  "yappi>=1.3.6",
+  "futureproof>=0.3.1",
+  "snakemake>=7.14.0",
+  "snakefmt>=0.6.1",
+  "pytest-monitor>=1.6.4",
 ]
 
 [tool.pdm.scripts]
-test = "pytest"
+test = "pytest -p no:pytest-workflow"
+test_wf.cmd = "pytest -p pytest-workflow -p no:pytest-monitor --tag stepwise --git-aware  --kwd tests/workflow/"
+test_wf.env = { PYTEST_DISABLE_PLUGIN_AUTOLOAD = "1" }
 testw = "pytest --looponfail"
 cli = "pore-c2"
-jupyter= "jupyter lab"
+jupyter = "jupyter lab"
 
 [tool.pdm.build]
 includes = []
 
 
-
 [tool.commitizen]
 name = "cz_conventional_commits"
 version = "0.1.0"
-version_files = [
-    "pyproject.toml:version"
-]
+version_files = ["pyproject.toml:version"]
 #update_changelog_on_bump = true
 
 
-
 [tool.pytest]
-testpaths=['tests']
+testpaths = ['tests']
 norecursedirs = ["dist", "build", ".tox", "scratch*", ".cache", ".venv"]
 doctest_optionflags = ["NORMALIZE_WHITESPACE", "IGNORE_EXCEPTION_DETAIL"]
-looponfailroots=["tests","src"]
+looponfailroots = ["tests", "src"]
 
 [tool.isort]
 profile = "black"
@@ -90,11 +94,7 @@ known_first_party = "aws_interfacing"
 
 [tool.pyright]
 include = ["src"]
-exclude = [
-    "**/__pycache__",
-    ".venv",
-  "scratch"
-]
+exclude = ["**/__pycache__", ".venv", "scratch"]
 venvPath = "./."
 venv = ".venv"
 extraPaths = ["./.venv"]
@@ -118,26 +118,23 @@ source = "pore_c2"
 # omit = bad_file.py
 
 [[tool.coverage.paths]]
-source =[
-    "src/",
-    "*/site-packages/"
-]
+source = ["src/", "*/site-packages/"]
 
 [[tool.coverage.report]]
 # Regexes for lines to exclude from consideration
 exclude_lines = [
-    # Have to re-enable the standard pragma
-    "pragma: no cover",
+  # Have to re-enable the standard pragma
+  "pragma: no cover",
 
-    # Don't complain about missing debug-only code:
-    "def __repr__",
-    "if self.debug",
+  # Don't complain about missing debug-only code:
+  "def __repr__",
+  "if self.debug",
 
-    # Don't complain if tests don't hit defensive assertion code:
-    "raise AssertionError",
-    "raise NotImplementedError",
+  # Don't complain if tests don't hit defensive assertion code:
+  "raise AssertionError",
+  "raise NotImplementedError",
 
-    # Don't complain if non-runnable code isn't run:
-    "if 0:",
-    "if __name__ == .__main__.:",
+  # Don't complain if non-runnable code isn't run:
+  "if 0:",
+  "if __name__ == .__main__.:",
 ]
