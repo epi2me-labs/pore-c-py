@@ -122,6 +122,9 @@ def digest_concatemers(
 
 @utils.command()
 def process_monomer_alignments(bam: Path, output_path: Path):
+    # logger = get_logger()
+    # read_stream = get_reads(bam)
+
     raise NotImplementedError
 
 

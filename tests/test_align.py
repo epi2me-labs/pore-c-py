@@ -1,3 +1,5 @@
+from typing import List
+
 import mappy as mp
 import pytest
 
@@ -74,3 +76,41 @@ def test_group_aligns():
     with pytest.raises(ValueError):
         for concat_id, aligns in group_aligns_by_concatemers(shuffled):
             pass
+
+
+def pair_to_junction(align1: AlignData, align2: AlignData):
+    raise ValueError(align1, align2)
+
+
+def aligns_to_pairs(aligns: List[AlignData]):
+    from itertools import combinations
+
+    for pair in combinations(aligns):
+        print(pair)
+
+
+def test_aligns_to_junctions():
+    monomer_length = 10
+    genome_pos = [("chr1", 0), ("chr1", 100), ("chr1", 110), ("chr2", 0), ("chr1", 50)]
+    num_monomers = len(genome_pos)
+    aligns = [
+        AlignData(
+            name=f"read1:{x}",
+            flag=0,
+            seq="ATGC",
+            ref_name=chrom,
+            ref_pos=start,
+            length=monomer_length,
+            tags=[
+                "MI:Z:read1",
+                f"Xc:B:i,{x*monomer_length},{(x+1)*monomer_length},{x},{num_monomers}",
+            ],
+        )
+        for x, (chrom, start) in enumerate(genome_pos)
+    ]
+    # sort by read coords
+    aligns = sorted(aligns, key=lambda x: x.concatemer_metadata.subread_idx)
+    # look at all combinations of monomers to create junctions
+    #
+    for a in aligns:
+        print(a)
