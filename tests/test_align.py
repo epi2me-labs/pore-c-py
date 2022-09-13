@@ -109,7 +109,7 @@ def test_aligns_to_junctions():
         for x, (chrom, start) in enumerate(genome_pos)
     ]
     # sort by read coords
-    aligns = sorted(aligns, key=lambda x: x.concatemer_metadata.subread_idx)
+    # aligns = sorted(aligns, key=lambda x: x.concatemer_metadata.subread_idx)
     # look at all combinations of monomers to create junctions
     #
     for a in aligns:

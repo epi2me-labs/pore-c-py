@@ -4,8 +4,8 @@ from typing import Optional
 
 import mappy
 import typer
+from numpy.random import default_rng
 from pysam import FastaFile, faidx  # pyright: ignore [reportGeneralTypeIssues]
-from rich.console import Console
 
 from pore_c2 import __version__
 
@@ -21,9 +21,13 @@ from .monomers import (
     get_writer,
 )
 from .settings import MINIMAP2_SETTINGS
+from .testing import Scenario
+
+# from rich.console import Console
+
 
 app = typer.Typer()
-console = Console()
+# console = Console()
 
 
 @app.callback()
@@ -118,6 +122,51 @@ def digest_concatemers(
         f"{writer.read_counter:,} reads to {output_path}"
     )
     return writer
+
+
+@utils.command()
+def create_test_data(
+    base_dir: Path,
+    genome_size: int = 5_000,
+    num_chroms: int = 2,
+    cut_rate: float = 0.005,
+    enzyme: str = "NlaIII",
+    num_concatemers: int = 100,
+    num_haplotypes: int = 0,
+    variant_density: float = 0.0,
+    seed: Optional[int] = None,
+):
+    logger = get_logger()
+    logger.info(f"Creating test data at: {base_dir}")
+
+    if seed is None:
+        rng = default_rng()
+    else:
+        rng = default_rng(seed)
+    logger.debug(f"Dividing genome {genome_size} into {num_chroms} chromosomes")
+    chrom_lengths = {
+        f"chr{x+1}": v
+        for x, v in enumerate(
+            sorted(rng.choice(genome_size, size=num_chroms, replace=False))
+        )
+    }
+    logger.debug("Creating scenario")
+    scenario = Scenario(
+        chrom_lengths,
+        cut_rate=cut_rate,
+        enzyme=enzyme,
+        num_concatemers=num_concatemers,
+        num_haplotypes=num_haplotypes,
+        variant_density=variant_density,
+        temp_path=base_dir,
+        random_state=rng,
+    )
+    logger.info(f"Creating scenario: {scenario}")
+    logger.info(f"Genome fasta: {scenario.reference_fasta}")
+    logger.info(f"Concatemer fastq: {scenario.concatemer_fastq}")
+    if num_haplotypes >= 2 and variant_density > 0:
+        logger.info(f"Phased VCF: {scenario.concatemer_fastq}")
+    return scenario
 
 
 @utils.command()

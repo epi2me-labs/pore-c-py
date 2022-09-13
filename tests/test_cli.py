@@ -5,7 +5,7 @@ import pysam
 import pytest
 from typer.testing import CliRunner
 
-from pore_c2.cli import app, digest_concatemers
+from pore_c2.cli import app, create_test_data, digest_concatemers
 from pore_c2.testing import Scenario
 
 
@@ -55,6 +55,14 @@ def test_digest_concatemers(default_scenario: Scenario, tmp_path, suffix):
             concatemer_id = rec.get_tag("MI")
             observed[concatemer_id] += 1
     assert len(observed) == len(expected)
+
+
+def test_create_test_data(tmp_path):
+    scenario: Scenario = create_test_data(tmp_path, seed=421)
+    existing_files = scenario.fc.existing()
+    for k in ["reference_fasta", "concatemer_fastq"]:
+        assert existing_files[k].exists() is True
+    print(scenario)
 
 
 # TODO: this might be redundant

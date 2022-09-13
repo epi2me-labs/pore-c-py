@@ -6,18 +6,17 @@ authors = [
   { name = "Eoghan Harrington", email = "eoghan.harrington@nanoporetech.com" },
 ]
 dependencies = [
-  "typer>=0.6.1",
-  "pysam>=0.19.1",
-  "mappy>=2.24",
-  "biopython>=1.79",
-  "pandas>=1.4.3",
-  "polars>=0.13.62",
-  "rich>=12.5.1",
-  "attrs>=22.1.0",
-  "cattrs>=22.1.0",
-  "dask[distributed]>=2022.8.0",
-  "streamz>=0.6.4",
-  "pytest-monitor>=1.6.4",
+    "typer>=0.6.1",
+    "pysam>=0.19.1",
+    "mappy>=2.24",
+    "biopython>=1.79",
+    "pandas>=1.4.3",
+    "polars>=0.13.62",
+    "attrs>=22.1.0",
+    "cattrs>=22.1.0",
+    "dask[distributed]>=2022.8.0",
+    "streamz>=0.6.4",
+    "pytest-monitor>=1.6.4",
 ]
 requires-python = ">=3.8"
 license = { text = "MIT" }

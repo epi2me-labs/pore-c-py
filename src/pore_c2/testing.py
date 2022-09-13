@@ -1,16 +1,31 @@
+import subprocess as sp
 from dataclasses import dataclass, field
 from itertools import count
 from pathlib import Path
+from shutil import which
 from tempfile import mkdtemp
 from typing import Dict, List, Optional, Tuple
 
 import numpy as np
 import numpy.typing as npt
 import polars as pl
+from attrs import define
 from numpy.random import Generator, default_rng
-from pysam import FastaFile, VariantFile, VariantHeader, tabix_compress, tabix_index
+from pysam import (
+    FastaFile,
+    VariantFile,
+    VariantHeader,
+    faidx,
+    tabix_compress,
+    tabix_index,
+)
 
 from pore_c2.monomers import GenomicFragment
+
+from .log import get_logger
+from .utils import FileCollection
+
+logger = get_logger()
 
 
 def simulate_sequence_with_cut_sites(
@@ -50,11 +65,17 @@ def simulate_fasta_with_cut_sites(
     fh = fasta.open("w")
     for chrom, length in seq_length.items():
         positions = cut_sites[chrom]
+        logger.debug(
+            f"Simulating sequence {chrom} with {len(positions)} "
+            f"cut sites in {length} bases"
+        )
         _, seq = simulate_sequence_with_cut_sites(
             enzyme, cut_sites=positions, seq_length=length, random_state=random_state
         )
         fh.write(f">{chrom}\n{seq}\n")
     fh.close()
+    logger.debug("Creating index file for fasta: {fasta}")
+    faidx(str(fasta))
     return fasta
 
 
@@ -67,7 +88,11 @@ def simulate_haplotypes(
     if random_state is None:
         random_state = default_rng()
 
-    ff = FastaFile(str(reference_fasta))
+    try:
+        ff = FastaFile(str(reference_fasta))
+    except Exception:
+        logger.debug(f"Error opeing {reference_fasta}")
+        raise
     mutations = {}
     bases = list("ATGC")
     for b in bases:
@@ -187,6 +212,7 @@ def simulate_contact_prob_matrix(
         p[min_idx - 1 : max_idx, min_idx - 1 : max_idx] = p_cis
     # no self-contacts
     np.fill_diagonal(p, 0)
+    # np.nan_to_num(p, copy=False, nan=0.0)
     # renormalize
     p = p / p.sum(axis=1)
 
@@ -359,6 +385,14 @@ def simulate_concatemer_fastqs(
     return pl.DataFrame(data, orient="row")
 
 
+@define
+class TestScenarioFileCollection(FileCollection):
+    ns_bam: Path = Path("{prefix}.name_sorted.bam")
+    reference_fasta: Path = Path("{prefix}.genome.fasta")
+    concatemer_fastq: Path = Path("{prefix}.concatemers.fastq")
+    phased_vcf: Path = Path("{prefix}.phased_variants.vcf.gz")
+
+
 @dataclass
 class Scenario:
     chrom_lengths: Dict[str, int]
@@ -367,31 +401,42 @@ class Scenario:
     random_state: np.random.Generator = field(
         default_factory=lambda: np.random.default_rng()
     )
-    cut_sites: Dict[str, List[int]] = field(init=False)
-    fragments: List[GenomicFragment] = field(init=False)
-    fragments_df: pl.DataFrame = field(init=False)
-    temp_path: Path = field(default_factory=lambda: Path(mkdtemp()))
     num_concatemers: int = 100
     num_haplotypes: int = 0
     variant_density: float = 0.0
 
+    temp_path: Path = field(default_factory=lambda: Path(mkdtemp()))
+
+    fc: TestScenarioFileCollection = field(init=False)
+    fragments_df: pl.DataFrame = field(init=False)
+    haplotype_df: Optional[pl.DataFrame] = field(init=False)
+    cut_sites: Dict[str, List[int]] = field(init=False)
+    fragments: List[GenomicFragment] = field(init=False)
+
     def __post_init__(self):
+        self.fc = TestScenarioFileCollection.with_prefix(self.temp_path)
         self.cut_sites = {}
         self.fragments = []
         id_iter = count(1)
+        logger.debug("Creating cut sites")
         for chrom, length in self.chrom_lengths.items():
             self.cut_sites[chrom] = sorted(
                 list(
                     self.random_state.integers(
-                        20, length - 20, size=int(length * self.cut_rate)
+                        # TODO: fix this arbitrary padding
+                        20,
+                        length - 20,
+                        size=max(1, int(length * self.cut_rate)),
                     )
                 )
             )
             self.fragments.extend(
                 GenomicFragment.from_cuts(chrom, length, self.cut_sites[chrom], id_iter)
             )
+            logger.debug(f"Created {len(self.cut_sites[chrom])} cut sites for {chrom}")
         self.fragments_df = GenomicFragment.to_dataframe(self.fragments)
         if self.num_haplotypes > 0:
+            logger.debug("Creating a haplotype dataframe")
             self.haplotype_df = simulate_haplotypes(
                 self.reference_fasta, self.num_haplotypes, self.variant_density
             )
@@ -400,7 +445,7 @@ class Scenario:
 
     @property
     def phased_vcf(self):
-        vcf = self.temp_path / "genotypes.vcf.gz"
+        vcf = self.fc.phased_vcf
         if self.haplotype_df is None:
             raise ValueError
         if not vcf.exists():
@@ -409,7 +454,7 @@ class Scenario:
 
     @property
     def reference_fasta(self):
-        fasta = self.temp_path / "genome.fasta"
+        fasta = self.fc.reference_fasta
         if not fasta.exists():
             simulate_fasta_with_cut_sites(
                 fasta,
@@ -426,8 +471,9 @@ class Scenario:
 
     @property
     def concatemer_fastq(self):
-        fastq = self.temp_path / "concatemers.fastq"
+        fastq = self.fc.concatemer_fastq
         if not fastq.exists():
+            logger.debug(self.reference_fasta)
             self.concatemer_metadata = simulate_concatemer_fastqs(
                 fastq,
                 self.reference_fasta,
@@ -438,6 +484,27 @@ class Scenario:
                 num_concatemers=self.num_concatemers,
             )
         return fastq
+
+    @property
+    def namesorted_bam(self):
+        ns_bam = self.fc.ns_bam
+        if not ns_bam.exists():
+            minimap_exe = which("minimap2")
+            if not minimap_exe:
+                # logger.error("No minimap executable found")
+                return None
+            try:
+                sp.check_call(
+                    f"minimap2 -ax map-ont {self.reference_fasta} "
+                    f"{self.concatemer_fastq} | samtools sort -t MI -o {ns_bam}"
+                )
+            except Exception:
+                raise
+
+            return ns_bam
+
+    def __str__(self):
+        return f"<Scenario {self.temp_path}>"
 
     # @property
     # def contact_prob_matrix(self):
