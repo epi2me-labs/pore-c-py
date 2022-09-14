@@ -1,11 +1,58 @@
+config['enzyme'] = 'NlaIII'
+
 
 rule all:
-    input:
-        "test.txt",
+  input:
+    genome="input/scenario.genome.fasta",
+    metadata="output/scenario.metadata.json",
+    ubam="output/scenario.monomers.bam",
+    bam="output/scenario.aligned.bam"
 
 
-rule echo:
-    output:
-        "test.txt",
-    shell:
-        "echo TEST > {output}"
+rule generate_test_data:
+  output:
+    genome="input/scenario.genome.fasta",
+    concatemers="input/scenario.concatemers.fastq"
+  params:
+    enzyme=config['enzyme']
+  shell:
+    "pore-c2 utils create-test-data input/scenario --enzyme {params.enzyme} --seed 421"
+
+
+rule index_genome:
+  output:
+    metadata="output/scenario.metadata.json",
+    mmi="output/scenario.mmi",
+    fragment_fasta="output/scenario.fragments.fasta",
+    fragment_table="output/scenario.fragments.parquet"
+  input:
+    genome="input/scenario.genome.fasta",
+  params:
+    enzyme=config['enzyme'],
+    prefix="output/scenario"
+  shell:
+    "pore-c2 index {input} {params.enzyme} --prefix {params.prefix}"
+
+
+rule split_concatemers_ubam:
+  output:
+    ubam="output/scenario.monomers.bam"
+  input:
+    concatemers="input/scenario.concatemers.fastq"
+  params:
+    enzyme=config['enzyme'],
+  shell:
+    "pore-c2 utils digest-concatemers {input} {params.enzyme} {output}"
+
+
+
+rule map_monomers:
+  output:
+    bam="output/scenario.aligned.bam"
+  input:
+    ubam="output/scenario.monomers.bam",
+    mmi="output/scenario.mmi",
+  shell:
+    "samtools fastq -T '*' {input.ubam} | "
+    "minimap2 -ax map-ont {input.mmi} - | "
+    "samtools sort -t MI -n -o {output.bam}"

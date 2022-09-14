@@ -3,6 +3,4 @@
   tags:
     - stepwise
   files:
-    - path: "test.txt"
-      contains:
-        - "TEST"
+    - path: "input/scenario.genome.fasta"
