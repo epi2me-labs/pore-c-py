@@ -1,9 +1,13 @@
-from typing import List
-
 import mappy as mp
 import pytest
 
-from pore_c2.aligns import group_aligns_by_concatemers, sort_aligns_by_concatmer_idx
+from pore_c2.aligns import (
+    get_concatemer_align_string,
+    get_pair_data,
+    get_pairs,
+    group_aligns_by_concatemers,
+    sort_aligns_by_concatmer_idx,
+)
 from pore_c2.model import AlignData
 from pore_c2.testing import Scenario, simulate_read_sequence
 
@@ -78,17 +82,6 @@ def test_group_aligns():
             pass
 
 
-def pair_to_junction(align1: AlignData, align2: AlignData):
-    raise ValueError(align1, align2)
-
-
-def aligns_to_pairs(aligns: List[AlignData]):
-    from itertools import combinations
-
-    for pair in combinations(aligns):
-        print(pair)
-
-
 def test_aligns_to_junctions():
     monomer_length = 10
     genome_pos = [("chr1", 0), ("chr1", 100), ("chr1", 110), ("chr2", 0), ("chr1", 50)]
@@ -111,9 +104,9 @@ def test_aligns_to_junctions():
     # sort by concatmer index
     sorted_aligns = sort_aligns_by_concatmer_idx(aligns)
 
-    # get positions
+    align_str = get_concatemer_align_string(sorted_aligns)
+    print(align_str)
 
-    # look at all combinations of monomers to create junctions
-    #
-    for a in aligns:
-        print(a)
+    for pair in get_pairs(sorted_aligns):
+        junction_data = get_pair_data(*pair)
+        print(junction_data)

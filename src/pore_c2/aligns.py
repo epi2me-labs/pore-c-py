@@ -1,6 +1,6 @@
-from itertools import groupby
+from itertools import combinations, groupby
 from pathlib import Path
-from typing import TYPE_CHECKING, Iterable, List, Tuple
+from typing import TYPE_CHECKING, Iterable, List, Optional, Tuple
 
 from attrs import define
 
@@ -53,6 +53,59 @@ def sort_aligns_by_concatmer_idx(
         if len(subread_idx) != expected_subreads:
             raise ValueError(f"Unexpected number of alignments: {md}")
     return new_aligns
+
+
+def get_pairs(
+    sorted_aligns: List[AlignData], direct_only: bool = False
+) -> Iterable[Tuple[AlignData, AlignData]]:
+    if direct_only:
+        pairs = zip(sorted_aligns[:-1], sorted_aligns[1:])
+    else:
+        pairs = combinations(sorted_aligns, 2)
+
+    for left, right in pairs:
+        yield (left, right)
+
+
+@define
+class PairData:
+    is_direct: bool
+    read_distance: int
+    both_aligned: bool
+    is_cis: Optional[bool] = None
+    genome_distance: int = -1
+
+
+def get_pair_data(left: AlignData, right: AlignData) -> PairData:
+    md_l, md_r = (
+        left.concatemer_metadata,
+        right.concatemer_metadata,
+    )
+    is_direct = (md_r.subread_idx - md_l.subread_idx) == 1
+
+    aligned_l, aligned_r = left.flag != 4, right.flag != 4
+    both_aligned = aligned_l & aligned_r
+    read_distance = md_r.start - md_l.end
+    if not both_aligned:
+        return PairData(is_direct, read_distance, both_aligned)
+    else:
+        is_cis = left.ref_name == right.ref_name
+        if is_cis:
+            if left.ref_pos < right.ref_pos:
+                genome_distance = right.ref_pos - (left.ref_pos + left.length)
+            else:
+                genome_distance = right.ref_pos - (right.ref_pos + right.length)
+        else:
+            genome_distance = -1
+        return PairData(is_direct, read_distance, both_aligned, is_cis, genome_distance)
+
+
+def get_concatemer_align_string(sorted_aligns: List[AlignData]) -> str:
+    res = [
+        f"{a.ref_name}:{a.ref_pos}_{a.ref_pos + a.length}" if a.flag != 4 else "*"
+        for a in sorted_aligns
+    ]
+    return ",".join(res)
 
 
 # TODO: delete this once we're sure we don't need it
