@@ -1,3 +1,4 @@
+import subprocess as sp
 from pathlib import Path
 
 import pytest
@@ -78,3 +79,16 @@ def large_scenario(scenario_dir):
     s.reference_fasta
     s.concatemer_fastq
     return s
+
+
+@pytest.fixture(scope="session")
+def name_sorted_bam(default_scenario: Scenario):
+    ns_bam = default_scenario.temp_path / "name_sorted.bam"
+    _ = sp.check_output(
+        f"minimap2 -ax map-ont "
+        f"{default_scenario.reference_fasta} {default_scenario.monomer_fastq} "
+        f"| samtools sort -t MI > {ns_bam}",
+        stderr=sp.STDOUT,
+        shell=True,
+    )
+    return ns_bam

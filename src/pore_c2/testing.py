@@ -65,16 +65,11 @@ def simulate_fasta_with_cut_sites(
     fh = fasta.open("w")
     for chrom, length in seq_length.items():
         positions = cut_sites[chrom]
-        logger.debug(
-            f"Simulating sequence {chrom} with {len(positions)} "
-            f"cut sites in {length} bases"
-        )
         _, seq = simulate_sequence_with_cut_sites(
             enzyme, cut_sites=positions, seq_length=length, random_state=random_state
         )
         fh.write(f">{chrom}\n{seq}\n")
     fh.close()
-    logger.debug("Creating index file for fasta: {fasta}")
     faidx(str(fasta))
     return fasta
 
@@ -91,7 +86,7 @@ def simulate_haplotypes(
     try:
         ff = FastaFile(str(reference_fasta))
     except Exception:
-        logger.debug(f"Error opeing {reference_fasta}")
+        logger.error(f"Error opeing {reference_fasta}")
         raise
     mutations = {}
     bases = list("ATGC")
@@ -271,6 +266,7 @@ def simulate_concatemer_fastqs(
     fastq: Path,
     reference_fasta: Path,
     fragments_df: pl.DataFrame,
+    monomer_fastq: Optional[Path],
     p_cis: float = 0.8,
     num_concatemers: int = 100,
     mean_frags_per_concatemer: int = 5,
@@ -326,6 +322,10 @@ def simulate_concatemer_fastqs(
 
     ff = FastaFile(str(reference_fasta))
     outfh = fastq.open("w")
+    if monomer_fastq:
+        monomer_fh = monomer_fastq.open("w")
+    else:
+        monomer_fh = None
     data = []
     for idx, (path, haplotype) in enumerate(zip(concatemers, haplotypes)):
         segments = []
@@ -348,15 +348,11 @@ def simulate_concatemer_fastqs(
                     pl.lit(None).alias("offset"),
                 ]
             )
-            # snps = frag_locs.join_asof(
-            #    haplotype_df.with_column(pl.col("pos").alias("loc")),
-            #    by="chrom",
-            #    left_on="start",
-            #    right_on="pos",
-            # ).filter(pl.col("loc") <= pl.col("end"))
 
-            # raise ValueError(snps)
-        for (
+        concatemer_id = f"CMER{idx}"
+        num_monomers = len(frag_locs)
+        c_start = 0
+        for monomer_idx, (
             chrom,
             start,
             end,
@@ -364,7 +360,7 @@ def simulate_concatemer_fastqs(
             _,  # haplotype_id
             allele_value,
             offset,
-        ) in frag_locs.rows():
+        ) in enumerate(frag_locs.rows()):
             id.append(fragment_id)
             _seq, _ = simulate_read_sequence(
                 ff=ff,
@@ -375,13 +371,20 @@ def simulate_concatemer_fastqs(
                 allele_values=allele_value,
             )
             segments.append(_seq)
+            if monomer_fh:
+                monomer_fh.write(
+                    f"@{concatemer_id}:{monomer_idx}_{num_monomers}\t"
+                    f"MI:Z:{concatemer_id}\t"
+                    f"Xc:B:i,{c_start},{c_start+len(_seq)},{monomer_idx},{num_monomers}"
+                    f"\n{_seq}\n+\n{'5'*len(_seq)}\n"
+                )
+            c_start += len(_seq)
 
         seq = "".join(segments)
         fragment_str = f"fragments={','.join(id)}"
         qual = "5" * len(seq)
-        outfh.write(f"@CMER{idx} {fragment_str}\n{seq}\n+\n{qual}\n")
-        data.append({"concatemer_id": f"CMER{idx}", "num_segments": len(segments)})
-        # logger.debug(seq)
+        outfh.write(f"@{concatemer_id} {fragment_str}\n{seq}\n+\n{qual}\n")
+        data.append({"concatemer_id": concatemer_id, "num_segments": len(segments)})
     return pl.DataFrame(data, orient="row")
 
 
@@ -390,6 +393,7 @@ class TestScenarioFileCollection(FileCollection):
     ns_bam: Path = Path("{prefix}.name_sorted.bam")
     reference_fasta: Path = Path("{prefix}.genome.fasta")
     concatemer_fastq: Path = Path("{prefix}.concatemers.fastq")
+    monomer_fastq: Path = Path("{prefix}.monomer.fastq")
     phased_vcf: Path = Path("{prefix}.phased_variants.vcf.gz")
 
 
@@ -418,7 +422,6 @@ class Scenario:
         self.cut_sites = {}
         self.fragments = []
         id_iter = count(1)
-        logger.debug("Creating cut sites")
         for chrom, length in self.chrom_lengths.items():
             self.cut_sites[chrom] = sorted(
                 list(
@@ -433,10 +436,8 @@ class Scenario:
             self.fragments.extend(
                 GenomicFragment.from_cuts(chrom, length, self.cut_sites[chrom], id_iter)
             )
-            logger.debug(f"Created {len(self.cut_sites[chrom])} cut sites for {chrom}")
         self.fragments_df = GenomicFragment.to_dataframe(self.fragments)
         if self.num_haplotypes > 0:
-            logger.debug("Creating a haplotype dataframe")
             self.haplotype_df = simulate_haplotypes(
                 self.reference_fasta, self.num_haplotypes, self.variant_density
             )
@@ -473,16 +474,24 @@ class Scenario:
     def concatemer_fastq(self):
         fastq = self.fc.concatemer_fastq
         if not fastq.exists():
-            logger.debug(self.reference_fasta)
             self.concatemer_metadata = simulate_concatemer_fastqs(
                 fastq,
                 self.reference_fasta,
                 self.fragments_df,
+                monomer_fastq=self.fc.monomer_fastq,
                 haplotype_df=self.haplotype_df,
                 num_haplotypes=self.num_haplotypes,
                 random_state=self.random_state,
                 num_concatemers=self.num_concatemers,
             )
+        return fastq
+
+    @property
+    def monomer_fastq(self):
+        fastq = self.fc.monomer_fastq
+        if not fastq.exists():
+            _ = self.concatemer_fastq
+            assert fastq.exists()
         return fastq
 
     @property

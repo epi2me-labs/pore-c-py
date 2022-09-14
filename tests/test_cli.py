@@ -5,7 +5,12 @@ import pysam
 import pytest
 from typer.testing import CliRunner
 
-from pore_c2.cli import app, create_test_data, digest_concatemers
+from pore_c2.cli import (
+    app,
+    create_test_data,
+    digest_concatemers,
+    process_monomer_alignments,
+)
 from pore_c2.testing import Scenario
 
 
@@ -62,7 +67,12 @@ def test_create_test_data(tmp_path):
     existing_files = scenario.fc.existing()
     for k in ["reference_fasta", "concatemer_fastq"]:
         assert existing_files[k].exists() is True
-    print(scenario)
+
+
+def test_process_monomer_alignments(name_sorted_bam, tmp_path):
+    output_bam = tmp_path / "processed.bam"
+    result = process_monomer_alignments(name_sorted_bam, output_bam)
+    print(result)
 
 
 # TODO: this might be redundant
