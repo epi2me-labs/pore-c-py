@@ -9,17 +9,11 @@ from pysam import FastaFile, faidx  # pyright: ignore [reportGeneralTypeIssues]
 
 from pore_c2 import __version__
 
+from .aligns import group_aligns_by_concatemers
 from .index import IndexFileCollection, IndexMetadata
-from .io import get_alignment_header
+from .io import find_files, get_alignment_header, get_aligns, get_reads, get_writer
 from .log import get_logger, init_logger
-from .monomers import (
-    EnzymeCutter,
-    digest_genome,
-    digest_read,
-    find_files,
-    get_reads,
-    get_writer,
-)
+from .monomers import EnzymeCutter, digest_genome, digest_read
 from .settings import MINIMAP2_SETTINGS
 from .testing import Scenario
 
@@ -171,7 +165,11 @@ def create_test_data(
 
 @utils.command()
 def process_monomer_alignments(bam: Path, output_path: Path):
-    # logger = get_logger()
+    logger = get_logger()
+    logger.info(f"Processing reads from {bam}")
+    align_stream = group_aligns_by_concatemers(get_aligns([bam]))
+    for align in align_stream:
+        print(align)
     # read_stream = get_reads(bam)
 
     raise NotImplementedError

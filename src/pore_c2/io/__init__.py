@@ -1,18 +1,39 @@
 from pathlib import Path
-from typing import TYPE_CHECKING, List, Optional
+from typing import TYPE_CHECKING, Iterable, List, Optional
 
 from pysam import AlignmentFile, AlignmentHeader, FastaFile
 
 from ..log import get_logger
 from ..settings import DEFAULT_ALIGN_HEADER
-from .reads import ReadIter, ReadWriter
+from .aligns import get_aligns
+from .reads import ReadIter, ReadWriter, get_reads, get_writer
 
-__all__ = ["get_alignment_header", "ReadWriter", "ReadIter"]
+__all__ = [
+    "get_alignment_header",
+    "ReadWriter",
+    "ReadIter",
+    "get_reads",
+    "get_writer",
+    "get_aligns",
+]
 
 logger = get_logger()
 
 if TYPE_CHECKING:
     pass
+
+
+def find_files(
+    root: Path, glob: str = "*.fastq", recursive: bool = True
+) -> Iterable[Path]:
+
+    if not root.is_dir():
+        yield root
+    else:
+        if recursive and not glob.startswith("**/"):
+            glob = f"**/{glob}"
+        for f in root.glob(glob):
+            yield (f)
 
 
 def get_alignment_header(

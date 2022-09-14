@@ -6,53 +6,14 @@ from typing import Any, Dict, Iterable, List, Optional, TextIO, Tuple
 import polars as pl
 from attrs import Factory, asdict, define, field, frozen
 from Bio.Seq import Seq
-from pysam import AlignmentHeader, FastaFile
+from pysam import FastaFile
 
-from .io import ReadIter, ReadWriter
 from .model import AlignData
 
 
 def digest_read(cutter: "Cutter", align: AlignData) -> List["AlignData"]:
     positions = cutter.get_cut_sites(align.seq)
     return align.split(positions)
-
-
-def get_reads(paths: Iterable[Path]) -> Iterable[AlignData]:
-    for p in paths:
-        reader = ReadIter.load(p)
-        for read in reader:
-            yield read
-
-
-def find_files(
-    root: Path, glob: str = "*.fastq", recursive: bool = True
-) -> Iterable[Path]:
-
-    if not root.is_dir():
-        yield root
-    else:
-        if recursive and not glob.startswith("**/"):
-            glob = f"**/{glob}"
-        for f in root.glob(glob):
-            yield (f)
-
-
-def find_reads(root: Path, glob: str = "*.fastq", recursive: bool = True):
-
-    if root.is_dir():
-        files = find_files(root, glob=glob, recursive=recursive)
-    else:
-        files = (root,)
-
-    for f in files:
-
-        print(f)
-
-
-def get_writer(
-    path: Path, align_header: Optional[AlignmentHeader] = None
-) -> ReadWriter:
-    return ReadWriter.load(path, header=align_header)
 
 
 class Cutter(metaclass=ABCMeta):

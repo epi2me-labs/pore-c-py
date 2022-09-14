@@ -1,5 +1,4 @@
 import re
-from functools import cache
 from typing import List, Mapping, Optional, Tuple
 
 from attrs import Factory, asdict, define
@@ -70,7 +69,6 @@ class AlignData:
     tags: List[str] = Factory(list)
 
     @property
-    @cache
     def concatemer_metadata(self) -> Optional[ConcatemerMetaData]:
         return ConcatemerMetaData.from_tags(self.tags)
 

@@ -4,14 +4,9 @@ from typing import Dict
 import pytest
 from pysam import AlignmentHeader, fqimport
 
-from pore_c2.io.reads import FastqReadIter
-from pore_c2.monomers import (
-    AlignData,
-    EnzymeCutter,
-    ReadIter,
-    digest_genome,
-    find_files,
-)
+from pore_c2.io import find_files
+from pore_c2.io.reads import FastqReadIter, ReadIter
+from pore_c2.monomers import AlignData, EnzymeCutter, digest_genome
 from pore_c2.testing import Scenario, simulate_sequence_with_cut_sites
 
 

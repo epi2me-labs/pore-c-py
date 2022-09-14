@@ -1,12 +1,13 @@
 from pathlib import Path
 from threading import Thread
-from typing import Any, Iterator, List
+from typing import Any, Iterable, Iterator, List, Optional
 
 from pysam import AlignedSegment, AlignmentFile, AlignmentHeader
 from pysam import sort as sort_bam  # pyright: ignore
 
-from ..align import MappingFileCollection
+from ..aligns import MappingFileCollection
 from ..log import get_logger
+from ..model import AlignData
 
 logger = get_logger()
 
@@ -57,3 +58,27 @@ class MapWriter(Thread):
         logger.debug(f"Sorting bam {self.fc.temp_bam}")
         sort_bam("--write-index", "-o", str(self.fc.bam), str(self.fc.temp_bam))
         self.fc.temp_bam.unlink()
+
+
+class AlignIter:
+    def __init__(self, bam: Path, header: Optional[AlignmentHeader] = None):
+        self.bam = bam
+        self.header = header
+
+    def __iter__(self) -> Iterator[AlignData]:
+        reader = AlignmentFile(str(self.bam))
+        if self.header is None:
+            self.header = reader.header
+        for align in reader.fetch(until_eof=True):
+            yield AlignData.from_alignment(align)
+
+    def iter_pysam(self) -> Iterator[AlignedSegment]:
+        for align in self:
+            yield (align.to_pysam(self.header))
+
+
+def get_aligns(paths: Iterable[Path]) -> Iterable[AlignData]:
+    for p in paths:
+        reader = AlignIter(p)
+        for align in reader:
+            yield align

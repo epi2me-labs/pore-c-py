@@ -1,14 +1,11 @@
 from abc import ABCMeta, abstractmethod
 from pathlib import Path
-from typing import TYPE_CHECKING, Iterable, Iterator, List, Optional
+from typing import Iterable, Iterator, List, Optional
 
 from pysam import AlignedSegment, AlignmentFile, AlignmentHeader, FastqFile
 
 from ..model import AlignData
 from ..settings import DEFAULT_ALIGN_HEADER
-
-if TYPE_CHECKING:
-    pass
 
 
 class ReadIter(metaclass=ABCMeta):
@@ -117,3 +114,16 @@ class FastQReadWriter(ReadWriter):
 
     def write_item(self, align: AlignData):
         self.fh.write(align.to_fastq())
+
+
+def get_reads(paths: Iterable[Path]) -> Iterable[AlignData]:
+    for p in paths:
+        reader = ReadIter.load(p)
+        for read in reader:
+            yield read
+
+
+def get_writer(
+    path: Path, align_header: Optional[AlignmentHeader] = None
+) -> ReadWriter:
+    return ReadWriter.load(path, header=align_header)

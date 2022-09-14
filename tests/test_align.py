@@ -3,7 +3,7 @@ from typing import List
 import mappy as mp
 import pytest
 
-from pore_c2.aligns import group_aligns_by_concatemers
+from pore_c2.aligns import group_aligns_by_concatemers, sort_aligns_by_concatmer_idx
 from pore_c2.model import AlignData
 from pore_c2.testing import Scenario, simulate_read_sequence
 
@@ -108,8 +108,11 @@ def test_aligns_to_junctions():
         )
         for x, (chrom, start) in enumerate(genome_pos)
     ]
-    # sort by read coords
-    # aligns = sorted(aligns, key=lambda x: x.concatemer_metadata.subread_idx)
+    # sort by concatmer index
+    sorted_aligns = sort_aligns_by_concatmer_idx(aligns)
+
+    # get positions
+
     # look at all combinations of monomers to create junctions
     #
     for a in aligns:
