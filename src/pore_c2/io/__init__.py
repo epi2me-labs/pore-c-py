@@ -58,5 +58,5 @@ def get_alignment_header(
     if not data:
         header = DEFAULT_ALIGN_HEADER
     else:
-        header = AlignmentHeader.from_dict(**data)
+        header = AlignmentHeader.from_dict(data)
     return header

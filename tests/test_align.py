@@ -1,14 +1,9 @@
 import mappy as mp
 import pytest
 
-from pore_c2.aligns import (
-    get_concatemer_align_string,
-    get_pair_data,
-    get_pairs,
-    group_aligns_by_concatemers,
-    sort_aligns_by_concatmer_idx,
-)
+from pore_c2.aligns import annotate_monomer_alignments, group_aligns_by_concatemers
 from pore_c2.model import AlignData
+from pore_c2.overlaps import FragmentOverlapper
 from pore_c2.testing import Scenario, simulate_read_sequence
 
 
@@ -84,7 +79,22 @@ def test_group_aligns():
 
 def test_aligns_to_junctions():
     monomer_length = 10
+
+    # TODO: annotate fragment overlaps
+    overlapper = FragmentOverlapper(
+        left={
+            "chr1": [0, 10, 100, 110, 120],
+            "chr2": [0, 10, 100, 110, 120],
+        },
+        ids={
+            "chr1": ["f11", "f12", "f13", "f14", "f15"],
+            "chr2": ["f21", "f22", "f23", "f24", "f25"],
+        },
+    )  # noqa
     genome_pos = [("chr1", 0), ("chr1", 100), ("chr1", 110), ("chr2", 0), ("chr1", 50)]
+    expected_walk = ",".join(
+        [f"{chrom}:{pos}_{pos+monomer_length}" for chrom, pos in genome_pos]
+    )
     num_monomers = len(genome_pos)
     aligns = [
         AlignData(
@@ -101,12 +111,23 @@ def test_aligns_to_junctions():
         )
         for x, (chrom, start) in enumerate(genome_pos)
     ]
-    # sort by concatmer index
-    sorted_aligns = sort_aligns_by_concatmer_idx(aligns)
+    res = list(annotate_monomer_alignments(aligns[::-1]))
+    assert len(res) == 1
+    concat_id, annotated_aligns = res[0]
+    assert concat_id == "read1"
+    # check that they're sorted
+    assert [(a.ref_name, a.ref_pos) for a in annotated_aligns] == genome_pos
+    # they all have the correct walk
+    assert [a.get_walk() for a in annotated_aligns] == [expected_walk] * len(aligns)
+    # they all point to the next monomer in the walk
+    for x, (chrom, pos) in enumerate(genome_pos[1:]):
+        a = annotated_aligns[x]
+        assert a.next_ref_name in (chrom, "=")
+        assert a.next_ref_pos == pos
+    # the last monomer in the concatemer should not have a next read
+    assert annotated_aligns[-1].next_ref_name == "*"
+    assert annotated_aligns[-1].next_ref_pos == 0
 
-    align_str = get_concatemer_align_string(sorted_aligns)
-    print(align_str)
-
-    for pair in get_pairs(sorted_aligns):
-        junction_data = get_pair_data(*pair)
-        print(junction_data)
+    # for concat_id, annotated_aligns in annotate_monomer_alignments(aligns):
+    #    print(concat_id, annotated_aligns)
+    #    print([a.next_ref_pos for a in annotated_aligns])

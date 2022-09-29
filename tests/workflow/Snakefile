@@ -1,68 +1,82 @@
-config['enzyme'] = 'NlaIII'
+config["enzyme"] = "NlaIII"
 
 
 rule all:
-  input:
-    genome="input/scenario.genome.fasta",
-    metadata="output/scenario.metadata.json",
-    ubam="output/scenario.monomers.bam",
-    bam="output/scenario.processed.bam"
+    input:
+        genome="input/scenario.genome.fasta",
+        metadata="output/scenario.metadata.json",
+        ubam="output/scenario.monomers.bam",
+        bam="output/scenario.processed.bam",
+        pairs="output/scenario.processed.pairs",
 
 
 rule generate_test_data:
-  output:
-    genome="input/scenario.genome.fasta",
-    concatemers="input/scenario.concatemers.fastq"
-  params:
-    enzyme=config['enzyme']
-  shell:
-    "pore-c2 utils create-test-data input/scenario --enzyme {params.enzyme} --seed 421"
+    output:
+        genome="input/scenario.genome.fasta",
+        concatemers="input/scenario.concatemers.fastq",
+    params:
+        enzyme=config["enzyme"],
+    shell:
+        "pore-c2 utils create-test-data input/scenario --enzyme {params.enzyme} --seed 421"
 
 
 rule index_genome:
-  output:
-    metadata="output/scenario.metadata.json",
-    mmi="output/scenario.mmi",
-    fragment_fasta="output/scenario.fragments.fasta",
-    fragment_table="output/scenario.fragments.parquet"
-  input:
-    genome="input/scenario.genome.fasta",
-  params:
-    enzyme=config['enzyme'],
-    prefix="output/scenario"
-  shell:
-    "pore-c2 index {input} {params.enzyme} --prefix {params.prefix}"
+    output:
+        metadata="output/scenario.metadata.json",
+        mmi="output/scenario.mmi",
+        fragment_fasta="output/scenario.fragments.fasta",
+        fragment_table="output/scenario.fragments.parquet",
+    input:
+        genome="input/scenario.genome.fasta",
+    params:
+        enzyme=config["enzyme"],
+        prefix="output/scenario",
+    shell:
+        "pore-c2 index {input} {params.enzyme} --prefix {params.prefix}"
 
 
 rule split_concatemers_ubam:
-  output:
-    ubam="output/scenario.monomers.bam"
-  input:
-    concatemers="input/scenario.concatemers.fastq"
-  params:
-    enzyme=config['enzyme'],
-  shell:
-    "pore-c2 utils digest-concatemers {input} {params.enzyme} {output}"
-
+    output:
+        ubam="output/scenario.monomers.bam",
+    input:
+        concatemers="input/scenario.concatemers.fastq",
+    params:
+        enzyme=config["enzyme"],
+    shell:
+        "pore-c2 utils digest-concatemers {input} {params.enzyme} {output}"
 
 
 rule map_monomers:
-  output:
-    bam="output/scenario.aligned.bam"
-  input:
-    ubam="output/scenario.monomers.bam",
-    mmi="output/scenario.mmi",
-  log: "output/scenario.aligned.bam.out"
-  shell:
-    "(samtools fastq -T '*' {input.ubam} | "
-    "minimap2 -ax map-ont {input.mmi} - | "
-    "samtools sort -t MI -n -o {output.bam} -) &> {log}"
+    output:
+        bam="output/scenario.aligned.bam",
+    input:
+        ubam="output/scenario.monomers.bam",
+        mmi="output/scenario.mmi",
+    log:
+        "output/scenario.aligned.bam.out",
+    shell:
+        "(samtools fastq -T '*' {input.ubam} | "
+        "minimap2 -ayx  map-ont {input.mmi} - | "
+        "samtools sort -t MI -n -o {output.bam} -) &> {log}"
 
 
 rule process_monomer_alignments:
-  output:
-    bam="output/scenario.processed.bam"
-  input:
-    bam="output/scenario.aligned.bam"
-  shell:
-    "pore-c2 utils process-monomer-alignments {input} {output}"
+    output:
+        bam="output/scenario.processed.bam",
+    input:
+        bam="output/scenario.aligned.bam",
+    shell:
+        "pore-c2 utils process-monomer-alignments {input} {output}"
+
+
+rule pairtools_parse:
+    input:
+        bam="output/scenario.processed.bam",
+    output:
+        pairs="output/scenario.processed.pairs",
+    log:
+        pairs="output/scenario.processed.pairs.log",
+    conda:
+        "pairtools.env.yml"
+    shell:
+        "pairtools parse2 -h  >{output}"

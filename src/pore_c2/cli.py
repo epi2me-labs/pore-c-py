@@ -9,7 +9,7 @@ from pysam import FastaFile, faidx  # pyright: ignore [reportGeneralTypeIssues]
 
 from pore_c2 import __version__
 
-from .aligns import group_aligns_by_concatemers
+from .aligns import annotate_monomer_alignments
 from .index import IndexFileCollection, IndexMetadata
 from .io import find_files, get_alignment_header, get_aligns, get_reads, get_writer
 from .log import get_logger, init_logger
@@ -20,7 +20,7 @@ from .testing import Scenario
 # from rich.console import Console
 
 
-app = typer.Typer()
+app = typer.Typer(pretty_exceptions_enable=False)
 # console = Console()
 
 
@@ -167,12 +167,17 @@ def create_test_data(
 def process_monomer_alignments(bam: Path, output_path: Path):
     logger = get_logger()
     logger.info(f"Processing reads from {bam}")
-    align_stream = group_aligns_by_concatemers(get_aligns([bam]))
-    for align in align_stream:
-        print(align)
-    # read_stream = get_reads(bam)
+    input_files = [bam]
+    header = get_alignment_header(source_files=input_files)
+    writer = get_writer(output_path, align_header=header)
+    annotated_stream = annotate_monomer_alignments(get_aligns(input_files))
 
-    raise NotImplementedError
+    writer.consume((_[1] for _ in annotated_stream))
+    logger.info(
+        f"Wrote {writer.base_counter:,} bases in "
+        f"{writer.read_counter:,} reads to {output_path}"
+    )
+    return writer
 
 
 app.add_typer(utils, name="utils")

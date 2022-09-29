@@ -1,3 +1,4 @@
+import shutil
 from collections import Counter
 from pathlib import Path
 
@@ -69,6 +70,7 @@ def test_create_test_data(tmp_path):
         assert existing_files[k].exists() is True
 
 
+@pytest.mark.skipif(shutil.which("minimap2") is None, reason="minimap2 is not in path")
 def test_process_monomer_alignments(name_sorted_bam, tmp_path):
     output_bam = tmp_path / "processed.bam"
     result = process_monomer_alignments(name_sorted_bam, output_bam)

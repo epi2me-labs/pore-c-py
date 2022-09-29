@@ -4,12 +4,15 @@ from typing import List, Mapping, Optional, Tuple
 from attrs import Factory, asdict, define
 from pysam import AlignedSegment, AlignmentHeader, FastxRecord
 
-from .settings import DEFAULT_ALIGN_HEADER, FASTQ_TAG_RE, MOD_TAGS
+from .settings import DEFAULT_ALIGN_HEADER, FASTQ_TAG_RE, MOD_TAGS, WALK_TAG
 
 TAG_MI_RE = re.compile(r"MI\:Z\:(\S+)")
+# XC==concatemer metadata
 TAG_XC_RE = re.compile(
     r"Xc:B:i,(?P<start>\d+),(?P<end>\d+),(?P<subread_idx>\d+),(?P<subread_total>\d+)"
 )
+# XW==walk metadata
+TAG_XW_RE = re.compile(r"Xw\:Z\:(.+)")  # TODO fill this out
 
 
 @define(kw_only=True, frozen=True)
@@ -51,7 +54,7 @@ class ConcatemerMetaData:
             raise ValueError(f"Error parsing concatemer coords: {d['Xc']}")
 
 
-@define(kw_only=True, frozen=True)
+@define(kw_only=True)
 class AlignData:
     """Utility class for building pysam AlignedSegments"""
 
@@ -78,6 +81,11 @@ class AlignData:
             if t.split(":", 1)[0] in MOD_TAGS:
                 return True
         return False
+
+    def get_walk(self) -> Optional[str]:
+        for t in self.tags:
+            if t.split(":", 1)[0] == WALK_TAG:
+                return t.split(":", 2)[-1]
 
     def split(self, positions: List[int]) -> List["AlignData"]:
         return split_align_data(self, positions)

@@ -96,3 +96,14 @@ class SamFlags:
     @property
     def primary(self):
         return not (self.secondary | self.supplementary)
+
+    @property
+    def category(self):
+        if self.secondary:
+            return "secondary"
+        elif self.supplementary:
+            return "supplementary"
+        elif self.unmap:
+            return "unmapped"
+        else:
+            return "primary"

@@ -1,3 +1,4 @@
+from collections import Counter
 from itertools import combinations, groupby
 from pathlib import Path
 from typing import TYPE_CHECKING, Iterable, List, Optional, Tuple
@@ -6,7 +7,8 @@ from attrs import define
 
 from .log import get_logger
 from .model import AlignData
-from .utils import FileCollection
+from .settings import WALK_TAG
+from .utils import FileCollection, SamFlags
 
 logger = get_logger()
 
@@ -42,7 +44,21 @@ def group_aligns_by_concatemers(
         seen.add(concat_id)
 
 
-def sort_aligns_by_concatmer_idx(
+def annotate_monomer_alignments(
+    mi_sorted_aligns: Iterable[AlignData],
+) -> Iterable[Tuple[str, List[AlignData]]]:
+    for concat_id, aligns in group_aligns_by_concatemers(mi_sorted_aligns):
+        # sort by read position so that we can correctly pair
+        sorted_aligns = sort_aligns_by_concatemer_idx(aligns)
+        align_str = get_concatemer_align_string(sorted_aligns)
+        for a in aligns:
+            set_walk_tag(a, align_str)
+        for (left, right) in get_pairs(sorted_aligns, direct_only=True):
+            set_next_read(left, right)
+        yield (concat_id, sorted_aligns)
+
+
+def sort_aligns_by_concatemer_idx(
     aligns: List[AlignData], validate: bool = True
 ) -> List[AlignData]:
     md = [a.concatemer_metadata for a in aligns]
@@ -50,8 +66,11 @@ def sort_aligns_by_concatmer_idx(
     new_aligns = [aligns[i] for i in orig_idx]
     if validate:
         expected_subreads = md[0].subread_total
-        if len(subread_idx) != expected_subreads:
-            raise ValueError(f"Unexpected number of alignments: {md}")
+        align_counts = Counter([SamFlags.from_int(a.flag).category for a in new_aligns])
+        if align_counts["primary"] + align_counts["unmapped"] != expected_subreads:
+            raise ValueError(
+                f"Unexpected number of alignments: {align_counts} {expected_subreads}"
+            )
     return new_aligns
 
 
@@ -62,9 +81,21 @@ def get_pairs(
         pairs = zip(sorted_aligns[:-1], sorted_aligns[1:])
     else:
         pairs = combinations(sorted_aligns, 2)
-
     for left, right in pairs:
         yield (left, right)
+
+
+def set_walk_tag(align: AlignData, walk_str: str):
+    align.tags.append(f"{WALK_TAG}:Z:{walk_str}")
+
+
+def set_next_read(left: AlignData, right: AlignData):
+    if right.ref_name != "*":
+        if right.ref_name == left.ref_name:
+            left.next_ref_name = "="
+        else:
+            left.next_ref_name = right.ref_name
+        left.next_ref_pos = right.ref_pos
 
 
 @define

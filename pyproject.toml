@@ -16,7 +16,6 @@ dependencies = [
     "cattrs>=22.1.0",
     "dask[distributed]>=2022.8.0",
     "streamz>=0.6.4",
-    "pytest-monitor>=1.6.4",
 ]
 requires-python = ">=3.8"
 license = { text = "MIT" }
@@ -45,19 +44,19 @@ build-backend = "pdm.pep517.api"
 [tool.pdm]
 [tool.pdm.dev-dependencies]
 dev = [
-  "pytest<8.0.0,>=7.1.2",
-  "pytest-xdist<3.0.0,>=2.5.0",
-  "pytest-cov>=3.0.0",
-  "pytest-watch>=4.2.0",
-  "yappi>=1.3.6",
-  "futureproof>=0.3.1",
-  "snakemake>=7.14.0",
-  "snakefmt>=0.6.1",
-  "pytest-monitor>=1.6.4",
+    "pytest<8.0.0,>=7.1.2",
+    "pytest-xdist<3.0.0,>=2.5.0",
+    "pytest-cov>=3.0.0",
+    "pytest-watch>=4.2.0",
+    "yappi>=1.3.6",
+    "futureproof>=0.3.1",
+    "snakemake>=7.14.0",
+    "snakefmt>=0.6.1",
+    "pytest-workflow>=1.6.0",
 ]
 
 [tool.pdm.scripts]
-test = "pytest --no-monitor "
+test = "pytest "
 test_perf = "pytest -p no:pytest-workflow"
 test_wf.cmd = "pytest -c tests/workflow/pytest.ini  tests/workflow/"
 test_wf.env = { PYTEST_DISABLE_PLUGIN_AUTOLOAD = "1" }
