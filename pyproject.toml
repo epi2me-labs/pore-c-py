@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "pore-c2"
-version = "0.1.0"
+version = "0.2.0"
 description = ""
 authors = [
   { name = "Eoghan Harrington", email = "eoghan.harrington@nanoporetech.com" },
@@ -56,7 +56,7 @@ jupyter = "jupyter lab"
 
 [tool.commitizen]
 name = "cz_conventional_commits"
-version = "0.1.0"
+version = "0.2.0"
 version_files = ["pyproject.toml:version"]
 #update_changelog_on_bump = true
 
