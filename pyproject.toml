@@ -1,3 +1,7 @@
+[build-system]
+requires = ["hatchling", "hatch-requirements-txt", "hatch-vcs"]
+build-backend = "hatchling.build"
+
 [project]
 name = "pore-c2"
 version = "0.1.0"
@@ -14,46 +18,29 @@ dependencies = [
     "polars>=0.13.62",
     "attrs>=22.1.0",
     "cattrs>=22.1.0",
-    "dask[distributed]>=2022.8.0",
-    "streamz>=0.6.4",
 ]
 requires-python = ">=3.8"
 license = { text = "MIT" }
 
-[project.optional-dependencies]
-jupyter = [
-  "jupyterlab>=3.4.5",
-  "jupyterlab-code-formatter>=1.5.3",
-  "jupyterlab-lsp>=3.10.1",
-  "jupytext>=1.14.1",
-  "line-profiler>=3.5.1",
-  "memory-profiler>=0.60.0",
-  "black>=22.6.0",
-  "isort>=5.10.1",
-]
-debug = ["debugpy>=1.6.3"]
-
 [project.scripts]
 pore-c2 = "pore_c2.cli:app"
 
-[build-system]
-requires = ["pdm-pep517>=1.0.0"]
-build-backend = "pdm.pep517.api"
 
+[tool.conda-lock]
+platforms = [
+  # 'osx-arm64',  uncomment this if bioconda ever adds support
+  'osx-64',
+  'linux-64'
+]
+channels = ['conda-forge', 'bioconda', 'defaults']
 
+[tool.conda-lock.dependencies]
+minimap2 = ">=2.24"
+
+# pairtools = ">=1.0.1"   # not available on bioconda yet
 [tool.pdm]
 [tool.pdm.dev-dependencies]
-dev = [
-    "pytest<8.0.0,>=7.1.2",
-    "pytest-xdist<3.0.0,>=2.5.0",
-    "pytest-cov>=3.0.0",
-    "pytest-watch>=4.2.0",
-    "yappi>=1.3.6",
-    "futureproof>=0.3.1",
-    "snakemake>=7.14.0",
-    "snakefmt>=0.6.1",
-    "pytest-workflow>=1.6.0",
-]
+
 
 [tool.pdm.scripts]
 test = "pytest "
@@ -65,9 +52,6 @@ test_wf.env = { PYTEST_DISABLE_PLUGIN_AUTOLOAD = "1" }
 #testw.env = { PYTEST_DISABLE_PLUGIN_AUTOLOAD = "1", PYTEST_ADDOPTS="--looponfail "}
 cli = "pore-c2"
 jupyter = "jupyter lab"
-
-[tool.pdm.build]
-includes = []
 
 
 [tool.commitizen]
