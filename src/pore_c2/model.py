@@ -144,8 +144,8 @@ class AlignData:
             tag_str = "\t".join(self.tags)
         else:
             tag_str = ""
-        if self.qual == "*":
-            raise ValueError(f"No quality, can't write fastq for {self.name}")
+        if self.qual == "*" and len(self.seq) > 1:
+            raise ValueError(f"No quality, can't write fastq for {self}")
         return f"@{self.name} {tag_str}\n{self.seq}\n+\n{self.qual}\n"
 
 

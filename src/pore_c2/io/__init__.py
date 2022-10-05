@@ -44,7 +44,7 @@ def get_alignment_header(
     if source_files:
         bams = [f for f in source_files if f.suffix in (".bam", ".sam", ".cram")]
         if len(bams) == 1:
-            source_header = AlignmentFile(str(bams[0])).header
+            source_header = AlignmentFile(str(bams[0]), check_sq=False).header
             data = {**data, **source_header.to_dict()}
         elif len(bams) > 1:
             raise NotImplementedError(f"Too many bams {bams}")
