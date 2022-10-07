@@ -1,59 +1,12 @@
-from abc import ABCMeta, abstractmethod
 from collections import Counter
 from pathlib import Path
-from typing import Any, Dict, Iterable, List, Optional, TextIO, Tuple
+from typing import Any, Dict, Iterable, List, Optional, TextIO
 
 import polars as pl
 from attrs import Factory, asdict, define, field, frozen
-from Bio.Seq import Seq
 from pysam import FastaFile
 
-from .model import AlignData
-
-
-def digest_read(cutter: "Cutter", align: AlignData) -> List["AlignData"]:
-    positions = cutter.get_cut_sites(align.seq)
-    return align.split(positions)
-
-
-class Cutter(metaclass=ABCMeta):
-    @abstractmethod
-    def get_cut_sites(self, seq: str) -> List[int]:
-        ...
-
-    def get_cut_intervals(self, seq: str) -> Tuple[List[int], List[int]]:
-        sites = self.get_cut_sites(seq)
-        seq_len = len(seq)
-        if not sites:
-            return [0], [seq_len]
-        if sites[-1] == seq_len:
-            sites = sites[:-1]
-        starts = sites
-        if starts[0] != 0:
-            starts.insert(0, 0)
-        ends = starts[1:] + [len(seq)]
-        return starts, ends
-
-
-class EnzymeCutter(Cutter):
-    def __init__(self, enzyme: Any):
-        self.enzyme = enzyme
-
-    @classmethod
-    def from_name(cls, enzyme_id: str):
-        from Bio import Restriction
-
-        enz = getattr(Restriction, enzyme_id, None)
-        if enz is None:
-            raise ValueError(f"Enzyme not found: {enzyme_id}")
-        if enz.cut_twice():
-            raise NotImplementedError(
-                f"Enzyme cuts twice, not currently supported: {enzyme_id}"
-            )
-        return cls(enz)
-
-    def get_cut_sites(self, seq: str) -> List[int]:
-        return [_ - 1 for _ in self.enzyme.search(Seq(seq))]
+from .model import Cutter
 
 
 @frozen
@@ -119,47 +72,6 @@ class GenomicFragment:
             GenomicFragment(chrom=chrom, start=start, end=end, fragment_idx=frag_id)
             for start, end, frag_id in zip(p[0:-1], p[1:], id_iter)
         ]
-
-
-@define(kw_only=True)
-class ReadFragment:
-    read_fragment_id: str = field(init=False)
-    read_start: int
-    read_end: int
-    read_id: str
-    read_fragment_idx: int
-    total_read_fragments: int
-    sequence: Optional[str] = None
-
-    def __attrs_post_init__(self):
-        self.read_fragment_id = (
-            f"{self.read_id}:{self.read_start}_{self.read_end}"
-            f":{self.read_fragment_idx}_{self.total_read_fragments}"
-        )
-
-    def slice_fastq(self, read: AlignData) -> Tuple[str, str]:
-        seq = read.seq[self.read_start : self.read_end]
-        qual = read.qual[self.read_start : self.read_end]
-        return (seq, qual)
-
-
-def sequence_to_read_fragments(
-    cutter: Cutter, read: AlignData, store_sequence: bool = True
-) -> List[ReadFragment]:
-    starts, ends = cutter.get_cut_intervals(read.seq)
-    num_fragments = len(starts)
-    read_fragments = [
-        ReadFragment(
-            read_id=read.name,
-            read_start=start,
-            read_end=end,
-            read_fragment_idx=x,
-            total_read_fragments=num_fragments,
-            sequence=read.seq[start:end] if store_sequence else None,
-        )
-        for x, (start, end) in enumerate(zip(starts, ends))
-    ]
-    return read_fragments
 
 
 def sequence_to_genomic_fragments(

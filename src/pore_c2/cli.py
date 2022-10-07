@@ -1,4 +1,4 @@
-from functools import partial
+from contextlib import closing
 from pathlib import Path
 from typing import Optional
 
@@ -11,9 +11,16 @@ from pore_c2 import __version__
 
 from .aligns import annotate_monomer_alignments
 from .index import IndexFileCollection, IndexMetadata
-from .io import find_files, get_alignment_header, get_aligns, get_reads, get_writer
+from .io import (
+    find_files,
+    get_alignment_header,
+    get_concatemer_seqs,
+    get_monomer_aligns,
+    get_monomer_writer,
+)
 from .log import get_logger, init_logger
-from .monomers import EnzymeCutter, digest_genome, digest_read
+from .model import EnzymeCutter
+from .monomers import digest_genome
 from .settings import MINIMAP2_SETTINGS
 from .testing import Scenario
 
@@ -105,16 +112,18 @@ def digest_concatemers(
     logger.info("Digesting concatemers")
     input_files = list(find_files(file_or_root, glob=glob, recursive=recursive))
     header = get_alignment_header(source_files=input_files)
-    read_stream = get_reads(input_files)
+    read_stream = get_concatemer_seqs(input_files)
     cutter = EnzymeCutter.from_name(enzyme)
-    writer = get_writer(output_path, align_header=header)
-    cut_read = partial(digest_read, cutter)
-
-    writer.consume(map(cut_read, read_stream))
-    logger.info(
-        f"Wrote {writer.base_counter:,} bases in "
-        f"{writer.read_counter:,} reads to {output_path}"
+    monomer_stream = (
+        monomer.read_seq for read in read_stream for monomer in read.cut(cutter)
     )
+
+    with closing(get_monomer_writer(output_path, header=header)) as writer:
+        writer.consume(monomer_stream)
+    # logger.info(
+    #    f"Wrote {writer.base_counter:,} bases in "
+    #    f"{writer.read_counter:,} reads to {output_path}"
+    # )
     return writer
 
 
@@ -169,14 +178,21 @@ def process_monomer_alignments(bam: Path, output_path: Path):
     logger.info(f"Processing reads from {bam}")
     input_files = [bam]
     header = get_alignment_header(source_files=input_files)
-    writer = get_writer(output_path, align_header=header)
-    annotated_stream = annotate_monomer_alignments(get_aligns(input_files))
+    writer = get_monomer_writer(output_path, header=header)
 
-    writer.consume((_[1] for _ in annotated_stream))
-    logger.info(
-        f"Wrote {writer.base_counter:,} bases in "
-        f"{writer.read_counter:,} reads to {output_path}"
+    monomer_aligns = get_monomer_aligns(input_files)
+    annotated_stream = (
+        m.read_seq
+        for (_, monomers) in annotate_monomer_alignments(monomer_aligns)
+        for m in monomers
     )
+
+    with closing(get_monomer_writer(output_path, header=header)) as writer:
+        writer.consume(annotated_stream)
+    # logger.info(
+    #    f"Wrote {writer.base_counter:,} bases in "
+    #    f"{writer.read_counter:,} reads to {output_path}"
+    # )
     return writer
 
 

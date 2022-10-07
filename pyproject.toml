@@ -36,22 +36,7 @@ channels = ['conda-forge', 'bioconda', 'defaults']
 
 [tool.conda-lock.dependencies]
 minimap2 = ">=2.24"
-
 # pairtools = ">=1.0.1"   # not available on bioconda yet
-[tool.pdm]
-[tool.pdm.dev-dependencies]
-
-
-[tool.pdm.scripts]
-test = "pytest "
-test_perf = "pytest -p no:pytest-workflow"
-test_wf.cmd = "pytest -c tests/workflow/pytest.ini  tests/workflow/"
-test_wf.env = { PYTEST_DISABLE_PLUGIN_AUTOLOAD = "1" }
-# FIXFIX
-#testw.cmd = "pytest -p no:pytest-monitor -p no:pytest-workflow -p  xdist"
-#testw.env = { PYTEST_DISABLE_PLUGIN_AUTOLOAD = "1", PYTEST_ADDOPTS="--looponfail "}
-cli = "pore-c2"
-jupyter = "jupyter lab"
 
 
 [tool.commitizen]

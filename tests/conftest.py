@@ -1,10 +1,12 @@
 import subprocess as sp
 from pathlib import Path
+from typing import Dict
 
 import pytest
 from numpy.random import default_rng
 from typer.testing import CliRunner
 
+from pore_c2.model import ReadSeq, TagData
 from pore_c2.testing import Scenario
 
 
@@ -92,3 +94,46 @@ def name_sorted_bam(default_scenario: Scenario):
         shell=True,
     )
     return ns_bam
+
+
+@pytest.fixture(scope="session")
+def mock_read_no_qual() -> ReadSeq:
+    return ReadSeq(name="read_no_qual", sequence="ACTG", quality=None)
+
+
+@pytest.fixture(scope="session")
+def mock_read_w_qual() -> ReadSeq:
+    return ReadSeq(name="read_w_qual", sequence="ACTGACTG", quality="!" * 8)
+
+
+@pytest.fixture(scope="session")
+def mock_read_w_tags() -> ReadSeq:
+    return ReadSeq(
+        name="read_w_tags",
+        sequence="AACGTTCGAAC",
+        quality="!!00{}22[]]",
+        tags={
+            "RG": TagData.from_string("RG:Z:RG01"),
+            "Mm": TagData.from_string("Mm:Z:C+m,0,1;"),
+            "Ml": TagData.from_string("Ml:B:C,122,128"),
+        },
+    )
+
+
+@pytest.fixture(scope="session")
+def mock_reads(
+    mock_read_no_qual: ReadSeq, mock_read_w_qual: ReadSeq, mock_read_w_tags
+) -> Dict[str, ReadSeq]:
+    reads = [mock_read_no_qual, mock_read_w_qual, mock_read_w_tags]
+    # reads = [
+    #    AlignData(name="read_no_qual", seq="ACTG"),
+    #    AlignData(name="read_w_qual", seq="ACTGACTG", qual="!" * 8),
+    #    AlignData(name="read_w_rg", seq="ACTGACTG", qual="!" * 8, tags=["RG:Z:RG01"]),
+    #    AlignData(
+    #        name="read_w_mods",
+    #        seq="AACGTTCGAAC",
+    #        qual="!!00{}22[]]",
+    #        tags=["RG:Z:RG01", "Mm:Z:C+m,0,1;", "Ml:B:C,122,128"],
+    #    ),
+    # ]
+    return {r.name: r for r in reads}
