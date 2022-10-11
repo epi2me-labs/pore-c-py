@@ -1,3 +1,13 @@
+## 0.3.0 (2022-10-11)
+
+### Fix
+
+- **model.py**: handle case where read is 1-base long and has '*' as quak
+
+### Refactor
+
+- refactor model.py
+
 ## 0.2.0 (2022-10-04)
 
 ### Feat
