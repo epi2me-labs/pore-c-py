@@ -8,6 +8,7 @@ dependencies = [
 [envs.default.scripts]
 test = "pytest {args}"
 cli = "pore-c2 {args}"
+cov = ["coverage run --module pytest", "coverage report --show-missing"]
 
 [envs.integration]
 dependencies = [

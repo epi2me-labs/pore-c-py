@@ -77,15 +77,14 @@ enable_error_code = ["ignore-without-code", "redundant-expr", "truthy-bool"]
 module = []
 ignore_missing_imports = true
 
-[[tool.coverage.run]]
+[tool.coverage.paths]
+source = ["src/pore_c2"]
+
+[tool.coverage.run]
 branch = true
-source = "pore_c2"
-# omit = bad_file.py
+source = ["pore_c2"]
 
-[[tool.coverage.paths]]
-source = ["src/", "*/site-packages/"]
-
-[[tool.coverage.report]]
+[tool.coverage.report]
 # Regexes for lines to exclude from consideration
 exclude_lines = [
   # Have to re-enable the standard pragma
