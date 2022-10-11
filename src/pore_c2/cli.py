@@ -1,4 +1,5 @@
 from contextlib import closing
+from itertools import islice
 from pathlib import Path
 from typing import Optional
 
@@ -106,6 +107,7 @@ def digest_concatemers(
     output_path: Path,
     glob: str = "*.fastq",
     recursive: bool = True,
+    max_reads: int = 0,
 ):
 
     logger = get_logger()
@@ -113,6 +115,8 @@ def digest_concatemers(
     input_files = list(find_files(file_or_root, glob=glob, recursive=recursive))
     header = get_alignment_header(source_files=input_files)
     read_stream = get_concatemer_seqs(input_files)
+    if max_reads:
+        read_stream = islice(read_stream, max_reads)
     cutter = EnzymeCutter.from_name(enzyme)
     monomer_stream = (
         monomer.read_seq for read in read_stream for monomer in read.cut(cutter)
