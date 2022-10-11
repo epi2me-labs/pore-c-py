@@ -24,7 +24,7 @@ post-install-commands = [
 test = "pytest -c tests/workflow/pytest.ini  tests/workflow/"
 
 
-[env.jupyter]
+[envs.jupyter]
 dependencies = [
   "jupyterlab>=3.4.5",
   "jupyterlab-code-formatter>=1.5.3",
@@ -36,5 +36,5 @@ dependencies = [
   "isort>=5.10.1",
 ]
 
-[env.jupyter.scripts]
+[envs.jupyter.scripts]
 lab = "jupyter lab"
