@@ -7,8 +7,11 @@ rule all:
         metadata="output/scenario.metadata.json",
         ubam="output/scenario.monomers.bam",
         bam="output/scenario.processed.bam",
-        # TODO: when pairtools 1.0.1 hits bioconda try this again
-        # pairs="output/scenario.processed.pairs",
+
+rule pairtools:
+  input:
+      # TODO: when pairtools 1.0.1 hits bioconda try this again
+      pairs="output/scenario.processed.pairs"
 
 
 rule generate_test_data:
@@ -77,5 +80,6 @@ rule pairtools_parse:
         pairs="output/scenario.processed.pairs",
     log:
         pairs="output/scenario.processed.pairs.log",
+    conda: "envs/pairtools.yml"
     shell:
         "pairtools parse2 -h  >{output}"

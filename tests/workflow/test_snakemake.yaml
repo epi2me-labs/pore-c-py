@@ -4,3 +4,10 @@
     - stepwise
   files:
     - path: "input/scenario.genome.fasta"
+
+- name: pairtools
+  command: snakemake --cores 1  --snakefile Snakefile pairtools --use-conda --conda-frontend conda
+  tags:
+    - integration
+  files:
+    - path: "input/scenario.genome.fasta"

@@ -1,0 +1,7 @@
+name: pairtools
+channels:
+  - conda-forge
+  - bioconda
+  - defaults
+dependencies:
+  - pairtools==1.0.1

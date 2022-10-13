@@ -15,10 +15,6 @@ dependencies = [
     "snakemake>=7.14.0",
     "pytest-workflow>=1.6.0",
 ]
-post-install-commands = [
-  "pip install pysam numpy cython --no-cache-dir",
-  "pip install pairtools --no-cache-dir",
-]
 
 [envs.integration.scripts]
 test = "pytest -c tests/workflow/pytest.ini  tests/workflow/"

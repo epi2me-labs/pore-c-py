@@ -58,7 +58,6 @@ def test_digest_concatemers(default_scenario: Scenario, tmp_path, suffix):
             concatemer_id = tags["MI"].split(":")[-1]
             observed[concatemer_id] += 1
     elif suffix == ".bam":
-
         with pysam_verbosity(0):
             af = pysam.AlignmentFile(output_file, check_sq=False)
         for rec in af:
