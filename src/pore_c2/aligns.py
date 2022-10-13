@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING, Iterable, List, Optional, Tuple
 from attrs import define
 
 from .log import get_logger
-from .model import AlignInfo, MonomerReadSeq, TagData
+from .model import AlignInfo, MonomerReadSeq
 from .settings import WALK_TAG
 from .utils import FileCollection, SamFlags
 
@@ -32,7 +32,7 @@ def group_aligns_by_concatemers(
     for concat_id, aligns in groupby(aligns, lambda x: x.concatemer_id):
         if concat_id in seen:
             raise ValueError(
-                f"Concatemer {concat_id} has already been seen, "
+                f"Concatemer '{concat_id}' has already been seen, "
                 "these alignments should be sorted by MI tag"
             )
         yield (concat_id, list(aligns))
@@ -89,9 +89,7 @@ def get_pairs(
 
 
 def set_walk_tag(align: MonomerReadSeq, walk_str: str):
-    align.read_seq.tags[WALK_TAG] = TagData(
-        key=WALK_TAG, dtype="Z", data=f"{WALK_TAG}:Z:{walk_str}"
-    )
+    align.read_seq.tags[WALK_TAG] = f"{WALK_TAG}:Z:{walk_str}"
 
 
 def set_next_read(left: MonomerReadSeq, right: MonomerReadSeq):
@@ -119,7 +117,6 @@ def get_pair_data(left: MonomerReadSeq, right: MonomerReadSeq) -> PairData:
         right.concatemer_metadata,
     )
     is_direct = (md_r.subread_idx - md_l.subread_idx) == 1
-
     aligned_l, aligned_r = left.flag != 4, right.flag != 4
     both_aligned = aligned_l & aligned_r
     read_distance = md_r.start - md_l.end

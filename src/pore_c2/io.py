@@ -1,11 +1,13 @@
+from collections import Counter
 from pathlib import Path
 from typing import Iterable, List, Literal, Mapping, Optional, Tuple, TypeVar, Union
 
 from pysam import AlignmentFile, AlignmentHeader, FastaFile, FastxFile
 
 from .log import get_logger
-from .model import ConcatemerReadSeq, MonomerReadSeq, ReadSeq
-from .settings import DEFAULT_ALIGN_HEADER
+from .model import ConcatemerReadSeq, MonomerReadSeq, ReadSeq, downgrade_mm_tag
+from .settings import DEFAULT_ALIGN_HEADER, DOWNGRADE_MM
+from .utils import SamFlags, pysam_verbosity
 
 T = TypeVar("T", ReadSeq, ConcatemerReadSeq, MonomerReadSeq)
 
@@ -24,7 +26,7 @@ def get_concatemer_seqs(paths: List[Path]) -> Iterable[ConcatemerReadSeq]:
 
 def get_monomer_aligns(paths: List[Path]) -> Iterable[MonomerReadSeq]:
     for p in paths:
-        for read_seq in iter_reads(p, primary_only=True, as_unaligned=True):
+        for read_seq in iter_reads(p, primary_only=True, as_unaligned=False):
             yield MonomerReadSeq.from_readseq(read_seq)
 
 
@@ -83,6 +85,7 @@ class SamWriter(Writer):
         self.path = path
         self.header = header
         self.as_unaligned = as_unaligned
+        self.counter = Counter()
 
         if self.path.suffix == ".bam":
             mode = "wb"
@@ -95,9 +98,12 @@ class SamWriter(Writer):
         self.writer = AlignmentFile(str(path), mode=mode, header=header)
 
     def write_record(self, rec: ReadSeq):
-        self.writer.write(
-            rec.to_align(header=self.header, as_unaligned=self.as_unaligned)
-        )
+        align = rec.to_align(header=self.header, as_unaligned=self.as_unaligned)
+        self.counter[SamFlags.from_int(align.flag).category] += 1
+        self.writer.write(align)
+
+    def close(self):
+        self.writer.close()
 
 
 def get_monomer_writer(
@@ -132,7 +138,8 @@ def get_raw_reader(
     if format in ["fastq", "fasta"]:
         reader = FastxFile(p)
     else:
-        reader = AlignmentFile(p, check_sq=False, **reader_kwds)
+        with pysam_verbosity(0):
+            reader = AlignmentFile(p, check_sq=False, **reader_kwds)
 
     return (format, reader)
 
@@ -148,6 +155,8 @@ def iter_reads(
         for rec in reader:
             if primary_only and (rec.is_supplementary or rec.is_secondary):
                 continue
+            if DOWNGRADE_MM:
+                rec = downgrade_mm_tag(rec)
             yield ReadSeq.from_align(rec, as_unaligned=as_unaligned)
     else:
         for rec in reader:
@@ -175,7 +184,8 @@ def get_alignment_header(
     if source_files:
         bams = [f for f in source_files if f.suffix in SAM_EXTS]
         if len(bams) == 1:
-            source_header = AlignmentFile(str(bams[0]), check_sq=False).header
+            with pysam_verbosity(0):
+                source_header = AlignmentFile(str(bams[0]), check_sq=False).header
             data = {**data, **source_header.to_dict()}
         elif len(bams) > 1:
             raise NotImplementedError(f"Too many bams {bams}")

@@ -13,6 +13,7 @@ from pore_c2.cli import (
     process_monomer_alignments,
 )
 from pore_c2.testing import Scenario
+from pore_c2.utils import pysam_verbosity
 
 
 @pytest.mark.parametrize("command", ["index", "align", "merge"])
@@ -57,7 +58,10 @@ def test_digest_concatemers(default_scenario: Scenario, tmp_path, suffix):
             concatemer_id = tags["MI"].split(":")[-1]
             observed[concatemer_id] += 1
     elif suffix == ".bam":
-        for rec in pysam.AlignmentFile(output_file, check_sq=False):
+
+        with pysam_verbosity(0):
+            af = pysam.AlignmentFile(output_file, check_sq=False)
+        for rec in af:
             concatemer_id = rec.get_tag("MI")
             observed[concatemer_id] += 1
     assert len(observed) == len(expected)
@@ -73,8 +77,14 @@ def test_create_test_data(tmp_path):
 @pytest.mark.skipif(shutil.which("minimap2") is None, reason="minimap2 is not in path")
 def test_process_monomer_alignments(name_sorted_bam, tmp_path):
     output_bam = tmp_path / "processed.bam"
-    result = process_monomer_alignments(name_sorted_bam, output_bam)
-    print(result)
+    writer = process_monomer_alignments(name_sorted_bam, output_bam)
+    writer.close()
+    output_bam.exists()
+
+    with pysam_verbosity(0):
+        num_aligns = len([a for a in pysam.AlignmentFile(str(output_bam))])
+    assert writer.counter["primary"] > 0
+    assert num_aligns == sum(writer.counter.values())
 
 
 # TODO: this might be redundant

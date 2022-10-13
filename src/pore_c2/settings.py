@@ -19,3 +19,4 @@ CONCATEMER_TAG = "Xc"
 #  <alpha-num><alpha-num>:<type>:<data>
 FASTQ_TAG_RE = re.compile(r"(?P<tag>\w\w):(?P<type>[ABfHiZ]):(?P<data>\S+)")
 DEFAULT_ALIGN_HEADER = AlignmentHeader.from_dict({"CO": [""]})
+DOWNGRADE_MM = True

@@ -8,7 +8,6 @@ from pore_c2.model import (
     ConcatemerReadSeq,
     MonomerReadSeq,
     ReadSeq,
-    TagData,
 )
 from pore_c2.settings import DEFAULT_ALIGN_HEADER
 from pore_c2.utils import SamFlags
@@ -18,7 +17,7 @@ def test_flow(concatemer_unaligned: AlignedSegment):
     concatemer = ConcatemerReadSeq.from_align(concatemer_unaligned, as_unaligned=True)
     monomers = concatemer.split([5])
     assert len(monomers) == 2
-    assert [_.read_seq.tags["MI"].data for _ in monomers] == [
+    assert [_.read_seq.tags["MI"].rsplit(":", 1)[1] for _ in monomers] == [
         "read_w_mods",
         "read_w_mods",
     ]
@@ -149,7 +148,7 @@ def monomer_read_seqs():
                         map_quality=20,
                         length=10,
                     ),
-                    tags={"MI": TagData(key="MI", dtype="Z", data=concatemer_id)},
+                    tags={"MI": f"MI:Z:{concatemer_id}"},
                 ),
             )
             res.append(m)
@@ -180,7 +179,9 @@ def test_mods(mock_reads):
 
 
 def test_split_read(concatemer_unaligned: AlignedSegment):
-    concatemer = ConcatemerReadSeq.from_align(concatemer_unaligned, as_unaligned=True)
+    concatemer = ConcatemerReadSeq.from_align(
+        concatemer_unaligned, as_unaligned=True, init_mod_bases=True
+    )
     monomers = concatemer.split([5])
     for idx, s in [(0, slice(None, 5)), (1, slice(5, None))]:
         assert monomers[idx].read_seq.sequence == concatemer_unaligned.seq[s]

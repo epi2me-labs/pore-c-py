@@ -372,10 +372,11 @@ def simulate_concatemer_fastqs(
             )
             segments.append(_seq)
             if monomer_fh:
+                c_end = c_start + len(_seq)
                 monomer_fh.write(
-                    f"@{concatemer_id}:{monomer_idx}_{num_monomers}\t"
+                    f"@{concatemer_id}:{c_start}:{c_end}\t"
                     f"MI:Z:{concatemer_id}\t"
-                    f"Xc:B:i,{c_start},{c_start+len(_seq)},{monomer_idx},{num_monomers}"
+                    f"Xc:B:i,{c_start},{c_end},{monomer_idx},{num_monomers}"
                     f"\n{_seq}\n+\n{'5'*len(_seq)}\n"
                 )
             c_start += len(_seq)
@@ -505,7 +506,7 @@ class Scenario:
             try:
                 sp.check_call(
                     f"minimap2 -ax map-ont {self.reference_fasta} "
-                    f"{self.concatemer_fastq} | samtools sort -t MI -o {ns_bam}"
+                    f"{self.monomer_fastq} | samtools sort -t MI -o {ns_bam}"
                 )
             except Exception:
                 raise

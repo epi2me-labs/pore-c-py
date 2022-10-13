@@ -1,8 +1,17 @@
 import enum
+from contextlib import contextmanager
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
+import pysam
 from attrs import asdict, define, fields, fields_dict
+
+
+@contextmanager
+def pysam_verbosity(level: int = 0):
+    current = pysam.set_verbosity(level)
+    yield
+    pysam.set_verbosity(current)
 
 
 @define

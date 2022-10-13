@@ -3,12 +3,22 @@ import re
 from abc import ABCMeta, abstractmethod
 from typing import Any, Dict, List, Mapping, Optional, Tuple
 
-import numpy as np
 from attrs import Factory, define
 from Bio.Seq import Seq
 from pysam import AlignedSegment, FastxRecord
 
 from .settings import DEFAULT_ALIGN_HEADER, FASTQ_TAG_RE, MOD_TAGS
+
+# copied from pysam.libcalignedsegment.pyx
+SAM_TYPES = "iiiiiif"
+HTSLIB_TYPES = "cCsSiIf"
+PARRAY_TYPES = "bBhHiIf"
+
+MM_TAG_SKIP_SCHEME_RE = re.compile(r"[.?]")
+
+ARRAY_TO_HTSLIB_TRANS = str.maketrans(PARRAY_TYPES, HTSLIB_TYPES)
+PYSAM_TO_SAM_TRANS = str.maketrans(HTSLIB_TYPES, SAM_TYPES)
+
 
 TAG_MI_RE = re.compile(r"MI\:Z\:(\S+)")
 # XC==concatemer metadata
@@ -17,6 +27,47 @@ TAG_XC_RE = re.compile(
 )
 # XW==walk metadata
 TAG_XW_RE = re.compile(r"Xw\:Z\:(.+)")  # TODO fill this out
+
+
+def tag_tuple_to_str(key: str, val: Any, value_type: str):
+    # TODO not sure if this works for H
+    value_type = value_type.translate(PYSAM_TO_SAM_TRANS)
+    if value_type == "B":
+        assert isinstance(val, array.array)
+        elemtype = val.typecode.translate(ARRAY_TO_HTSLIB_TRANS)
+        val = ",".join(map(str, val))
+        res = f"{key}:{value_type}:{elemtype},{val}"
+    elif value_type in "AfiZ":
+        res = f"{key}:{value_type}:{val}"
+    else:
+        # hope that python string formatting is correct
+        # TODO: warn about this?
+        res = f"{key}:{value_type}:{val}"
+    if ":S:" in res:
+        raise ValueError(key, val, value_type)
+    return res
+
+
+def downgrade_mm_tag(align: AlignedSegment) -> AlignedSegment:
+    orig_tag = None
+    for tag in ["MM", "Mm"]:
+        try:
+            orig_tag = align.get_tag(tag)
+        except KeyError:
+            continue
+        if orig_tag:
+            break
+    # alignment doesn't have tag, return
+    if not orig_tag:
+        return align
+    m = MM_TAG_SKIP_SCHEME_RE.search(orig_tag)
+    # tag does't contain skip_scheme character
+    if not m:
+        return align
+    new_tag = f"{tag}:Z:" + MM_TAG_SKIP_SCHEME_RE.sub("", orig_tag)
+    d = align.to_dict()
+    d["tags"] = [t for t in d["tags"] if not t.startswith(tag)] + [new_tag]
+    return AlignedSegment.from_dict(d, header=align.header)
 
 
 class Cutter(metaclass=ABCMeta):
@@ -117,56 +168,6 @@ def get_subread(
 
 
 @define(kw_only=True)
-class TagData:
-    key: str
-    dtype: str
-    data: str
-
-    @classmethod
-    def from_string(cls, source: str):
-        tag, tag_type, tag_data = source.strip().split(":", 2)
-        return cls.from_tuple(tag, tag_data, tag_type)
-
-    @classmethod
-    def from_tuple(cls, tag: str, tag_data: Any, tag_type: str):
-        if tag.upper() == "MI":
-            return MiTagData(key=tag, dtype=tag_type, data=tag_data.strip())
-        elif tag.upper() == "XC":
-            return XcTagData(key=tag, dtype=tag_type, data=tag_data)
-        elif tag.upper() == "ML":
-            # TODO: really need to figure out elegant way to round-trip tag data,
-            # this is gross
-            if tag_data.startswith("C,"):
-                tag_data = tag_data[2:]
-            return MlTagData(key=tag, dtype=tag_type, data=tag_data)
-        else:
-            return cls(key=tag, dtype=tag_type, data=tag_data)
-
-    def __str__(self):
-        return f"{self.key}:{self.dtype}:{self.data}"
-
-
-class MlTagData(TagData):
-    def __str__(self):
-        # TODO: figure out how to round-trip the data in pysam without manually
-        # adding 'C'
-        return f"{self.key}:{self.dtype}:C,{self.data}"
-
-
-class MiTagData(TagData):
-    @property
-    def concatemer_id(self):
-        return self.data
-
-
-class XcTagData(TagData):
-    def __str__(self):
-        # TODO: figure out how to round-trip the data without manually
-        # adding 'i'
-        return f"{self.key}:{self.dtype}:i,{self.data}"
-
-
-@define(kw_only=True)
 class AlignInfo:
     ref_name: str = "*"
     ref_pos: int = 0
@@ -183,7 +184,7 @@ class ReadSeq:
     quality: Optional[str] = None
     mod_bases: Optional[Dict] = None
     align_info: Optional[AlignInfo] = None
-    tags: Dict[str, TagData] = Factory(dict)
+    tags: Dict[str, str] = Factory(dict)
 
     @property
     def tag_str(self):
@@ -192,12 +193,11 @@ class ReadSeq:
     @classmethod
     def from_fastq(cls, rec: FastxRecord):
         if rec.comment:
-            tags = [
-                TagData.from_string(item.strip())
+            tags = {
+                item.split(":", 1)[0]: item
                 for item in rec.comment.split()
                 if FASTQ_TAG_RE.match(item.strip())
-            ]
-            tags = {_.key: _ for _ in tags}
+            }
         else:
             tags = {}
         return ReadSeq(
@@ -217,12 +217,15 @@ class ReadSeq:
         )
 
     @classmethod
-    def from_align(cls, rec: AlignedSegment, as_unaligned: bool = False):
+    def from_align(
+        cls,
+        rec: AlignedSegment,
+        as_unaligned: bool = False,
+        init_mod_bases: bool = False,
+    ):
         tags = {}
         for (tag, tag_data, tag_type) in rec.get_tags(with_value_type=True):
-            if isinstance(tag_data, (array.array, np.generic, np.ndarray)):
-                tag_data = ",".join([str(_) for _ in tag_data])
-            tags[tag] = TagData.from_tuple(tag, tag_data, tag_type)
+            tags[tag] = tag_tuple_to_str(tag, tag_data, tag_type)
         if as_unaligned or rec.is_unmapped:
             align_info = None
         else:
@@ -234,12 +237,18 @@ class ReadSeq:
                 cigar=rec.cigarstring,
                 length=rec.template_length,
             )
+        if init_mod_bases:
+            mod_bases = rec.modified_bases
+            if not mod_bases:
+                mod_bases = None
+        else:
+            mod_bases = None
         return cls(
             name=rec.query_name,
             sequence=rec.query_sequence,
             quality=rec.qual,
             tags=tags,
-            mod_bases=rec.modified_bases if rec.modified_bases else None,
+            mod_bases=mod_bases,
             align_info=align_info,
         )
 
@@ -292,18 +301,19 @@ class ConcatemerCoords:
     # total number of monomers in the read
 
     @classmethod
-    def from_tag(cls, tag: TagData):
+    def from_tag(cls, tag: str):
         try:
-            start, end, subread_idx, subread_total = map(int, tag.data.split(","))
+            tag, _, tag_data = tag.split(":", 2)
+            _, coords = tag_data.split(",", 1)
+            start, end, subread_idx, subread_total = map(int, coords.split(","))
         except Exception:
             raise ValueError(f"Error parsing concatmer coords from {tag}")
         return cls(
             start=start, end=end, subread_idx=subread_idx, subread_total=subread_total
         )
 
-    def to_tag(self) -> TagData:
-        data = f"{self.start},{self.end},{self.subread_idx},{self.subread_total}"
-        return XcTagData(key="Xc", dtype="Z", data=data)
+    def to_tag(self) -> str:
+        return f"Xc:B:i,{self.start},{self.end},{self.subread_idx},{self.subread_total}"
 
 
 @define(kw_only=True)
@@ -318,7 +328,8 @@ class MonomerReadSeq:
     # the coordinates of the monomer within the concatemer
 
     def _update_tags(self):
-        self.read_seq.tags["MI"] = TagData(key="MI", dtype="Z", data=self.concatemer_id)
+        self.read_seq.tags["MI"] = f"MI:Z:{self.concatemer_id}"
+        self.read_seq.tags["Xc"] = self.coords.to_tag()
 
     @classmethod
     def from_readseq(cls, rec: ReadSeq):
@@ -330,7 +341,7 @@ class MonomerReadSeq:
             )
         coords = ConcatemerCoords.from_tag(rec.tags["Xc"])
         monomer_id = rec.name
-        concatemer_id = rec.tags["MI"].data
+        concatemer_id = rec.tags["MI"].rsplit(":", 1)[-1]
         return cls(
             monomer_id=monomer_id,
             concatemer_id=concatemer_id,
@@ -343,19 +354,26 @@ class MonomerReadSeq:
         return cls.from_readseq(ReadSeq.from_fastq(rec))
 
     @classmethod
-    def from_align(cls, rec: AlignedSegment, as_unaligned: bool = False):
-        return cls.from_readseq(ReadSeq.from_align(rec, as_unaligned=as_unaligned))
+    def from_align(
+        cls,
+        rec: AlignedSegment,
+        as_unaligned: bool = False,
+        init_mod_bases: bool = False,
+    ):
+        return cls.from_readseq(
+            ReadSeq.from_align(
+                rec, as_unaligned=as_unaligned, init_mod_bases=init_mod_bases
+            )
+        )
 
     def to_fastq(self) -> FastxRecord:
         self._update_tags()
-        assert "MI" in self.read_seq.tags
         return self.read_seq.to_fastq()
 
     def to_align(
         self, header=DEFAULT_ALIGN_HEADER, as_unaligned: bool = False
     ) -> AlignedSegment:
         self._update_tags()
-        assert "MI" in self.read_seq.tags
         return self.read_seq.to_align(header=header, as_unaligned=as_unaligned)
 
 
@@ -386,8 +404,15 @@ class ConcatemerReadSeq:
         return cls.from_readseq(read_seq)
 
     @classmethod
-    def from_align(cls, rec: AlignedSegment, as_unaligned: bool = False):
-        read_seq = ReadSeq.from_align(rec, as_unaligned=as_unaligned)
+    def from_align(
+        cls,
+        rec: AlignedSegment,
+        as_unaligned: bool = False,
+        init_mod_bases: bool = False,
+    ):
+        read_seq = ReadSeq.from_align(
+            rec, as_unaligned=as_unaligned, init_mod_bases=init_mod_bases
+        )
         return cls.from_readseq(read_seq)
 
     def cut(self, cutter: Cutter) -> List[MonomerReadSeq]:
@@ -414,10 +439,11 @@ class ConcatemerReadSeq:
                 modified_bases=self.read_seq.mod_bases,
             )
             tags = {k: v for k, v in self.read_seq.tags.items() if k not in MOD_TAGS}
-            tags["MI"] = TagData(key="MI", dtype="Z", data=self.concatemer_id)
+            tags["Xc"] = coords.to_tag()
+            tags["MI"] = f"MI:Z:{self.concatemer_id}"
             if mm_str and ml_str:
-                tags["Mm"] = TagData.from_string(mm_str)
-                tags["Ml"] = TagData.from_string(ml_str)
+                tags["MM"] = mm_str
+                tags["ML"] = ml_str
             elif mm_str or ml_str:
                 raise ValueError(mm_str, ml_str)
 

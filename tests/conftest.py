@@ -6,7 +6,7 @@ import pytest
 from numpy.random import default_rng
 from typer.testing import CliRunner
 
-from pore_c2.model import ReadSeq, TagData
+from pore_c2.model import ReadSeq
 from pore_c2.testing import Scenario
 
 
@@ -89,7 +89,7 @@ def name_sorted_bam(default_scenario: Scenario):
     _ = sp.check_output(
         f"minimap2 -y -ax map-ont "
         f"{default_scenario.reference_fasta} {default_scenario.monomer_fastq} "
-        f"| samtools sort -t MI > {ns_bam}",
+        f"| samtools sort -t MI -o {ns_bam}",
         stderr=sp.STDOUT,
         shell=True,
     )
@@ -113,9 +113,9 @@ def mock_read_w_tags() -> ReadSeq:
         sequence="AACGTTCGAAC",
         quality="!!00{}22[]]",
         tags={
-            "RG": TagData.from_string("RG:Z:RG01"),
-            "Mm": TagData.from_string("Mm:Z:C+m,0,1;"),
-            "Ml": TagData.from_string("Ml:B:C,122,128"),
+            "RG": "RG:Z:RG01",
+            "Mm": "Mm:Z:C+m,0,1;",
+            "Ml": "Ml:B:C,122,128",
         },
     )
 
