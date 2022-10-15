@@ -1,16 +1,34 @@
 import pytest
 from pysam import AlignedSegment, AlignmentHeader, FastxRecord
 
-from pore_c2.aligns import group_aligns_by_concatemers
+from pore_c2.aligns import annotate_monomer_alignments, group_aligns_by_concatemers
 from pore_c2.model import (
     AlignInfo,
     ConcatemerCoords,
     ConcatemerReadSeq,
     MonomerReadSeq,
     ReadSeq,
+    Walk,
+    WalkSegment,
 )
-from pore_c2.settings import DEFAULT_ALIGN_HEADER
+from pore_c2.settings import DEFAULT_ALIGN_HEADER, WALK_TAG
 from pore_c2.utils import SamFlags
+
+
+@pytest.mark.parametrize(
+    "idx,total,expected",
+    [
+        (0, 1, "concat001:0"),
+        (1, 9, "concat001:1"),
+        (1, 10, "concat001:01"),
+        (0, 100, "concat001:000"),
+        (99, 100, "concat001:099"),
+    ],
+)
+def test_monomer_id(idx, total, expected):
+    coords = ConcatemerCoords(start=0, end=1, subread_idx=idx, subread_total=total)
+    res = MonomerReadSeq.generate_id("concat001", coords)
+    assert res == expected
 
 
 def test_flow(concatemer_unaligned: AlignedSegment):
@@ -168,6 +186,22 @@ def test_group_monomer_aligns(monomer_read_seqs):
             pass
 
 
+def test_annotate_monomer_aligns(monomer_read_seqs):
+    res = {
+        concat_id: aligns
+        for (concat_id, aligns) in annotate_monomer_alignments(monomer_read_seqs)
+    }
+    assert len(res) == 2
+    for aligns in res.values():
+        for a in aligns:
+            assert len(aligns) == 10
+            a._update_tags()
+            tags = a.read_seq.tags
+            assert "MI" in tags
+            assert WALK_TAG in tags
+            assert "Xc" in tags
+
+
 def test_mods(mock_reads):
     test_read = mock_reads["read_w_tags"]
     header = AlignmentHeader.from_dict(
@@ -186,6 +220,31 @@ def test_split_read(concatemer_unaligned: AlignedSegment):
     for idx, s in [(0, slice(None, 5)), (1, slice(5, None))]:
         assert monomers[idx].read_seq.sequence == concatemer_unaligned.seq[s]
         assert monomers[idx].read_seq.quality == concatemer_unaligned.qual[s]
-
     assert monomers[0].to_align().modified_bases == {("C", 0, "m"): [(2, 122)]}
     assert monomers[1].to_align().modified_bases == {("C", 0, "m"): [(5, 128)]}
+
+
+@pytest.mark.parametrize(
+    "args,expected",
+    [((0, 5), "*:0-5"), ((0, 5, "chr1", 0, 10, "+"), "chr1:+:0-10:0-5")],
+)
+def test_walk_segment(args, expected):
+    seg = WalkSegment(*args)
+    seg_str = seg.to_string()
+    assert seg_str == expected
+    seg1 = WalkSegment.from_string(seg_str)
+    assert seg == seg1
+
+
+def test_walk():
+    segments = [
+        WalkSegment(0, 5),
+        WalkSegment(5, 10, "chr1", 10, 15, "+"),
+        WalkSegment(10, 30, "chr2", 30, 50, "-"),
+        WalkSegment(30, 40),
+    ]
+    w = Walk(segments)
+    tag = "Xc:Z:*:0-5;chr1:+:10-15:5-10;chr2:-:30-50:10-30;*:30-40"
+    assert w.to_tag() == tag
+    w1 = Walk.from_tag(tag)
+    assert w1 == w

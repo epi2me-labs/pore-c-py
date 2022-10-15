@@ -1,13 +1,15 @@
 import array
 import re
 from abc import ABCMeta, abstractmethod
-from typing import Any, Dict, List, Mapping, Optional, Tuple
+from dataclasses import dataclass
+from typing import Any, Dict, List, Literal, Mapping, Optional, Tuple
 
 from attrs import Factory, define
 from Bio.Seq import Seq
 from pysam import AlignedSegment, FastxRecord
 
 from .settings import DEFAULT_ALIGN_HEADER, FASTQ_TAG_RE, MOD_TAGS
+from .utils import SamFlags
 
 # copied from pysam.libcalignedsegment.pyx
 SAM_TYPES = "iiiiiif"
@@ -27,6 +29,12 @@ TAG_XC_RE = re.compile(
 )
 # XW==walk metadata
 TAG_XW_RE = re.compile(r"Xw\:Z\:(.+)")  # TODO fill this out
+
+WALK_SEGMENT_RE = re.compile(
+    r"(?P<chrom>(\S+?)):(?P<orientation>[+-]):"
+    r"(?P<genome_start>\d+)-(?P<genome_end>\d+):"
+    r"(?P<read_start>\d+)-(?P<read_end>\d+)"
+)
 
 
 def tag_tuple_to_str(key: str, val: Any, value_type: str):
@@ -49,7 +57,7 @@ def tag_tuple_to_str(key: str, val: Any, value_type: str):
 
 
 def downgrade_mm_tag(align: AlignedSegment) -> AlignedSegment:
-    orig_tag = None
+    tag, orig_tag = None, None
     for tag in ["MM", "Mm"]:
         try:
             orig_tag = align.get_tag(tag)
@@ -60,9 +68,10 @@ def downgrade_mm_tag(align: AlignedSegment) -> AlignedSegment:
     # alignment doesn't have tag, return
     if not orig_tag:
         return align
+    assert isinstance(orig_tag, str)
     m = MM_TAG_SKIP_SCHEME_RE.search(orig_tag)
     # tag does't contain skip_scheme character
-    if not m:
+    if not m or not tag:
         return align
     new_tag = f"{tag}:Z:" + MM_TAG_SKIP_SCHEME_RE.sub("", orig_tag)
     d = align.to_dict()
@@ -176,6 +185,14 @@ class AlignInfo:
     cigar: str = "*"
     length: int = 0
 
+    @property
+    def ref_end(self):
+        return self.ref_pos + self.length
+
+    @property
+    def strand(self):
+        return SamFlags.int_to_strand(self.flag)
+
 
 @define(kw_only=True)
 class ReadSeq:
@@ -184,6 +201,7 @@ class ReadSeq:
     quality: Optional[str] = None
     mod_bases: Optional[Dict] = None
     align_info: Optional[AlignInfo] = None
+    next_align: Optional[Tuple[str, int]] = None
     tags: Dict[str, str] = Factory(dict)
 
     @property
@@ -243,6 +261,11 @@ class ReadSeq:
                 mod_bases = None
         else:
             mod_bases = None
+
+        if rec.next_reference_name:
+            next_align = (rec.next_reference_name, int(rec.next_reference_start))
+        else:
+            next_align = None
         return cls(
             name=rec.query_name,
             sequence=rec.query_sequence,
@@ -250,6 +273,7 @@ class ReadSeq:
             tags=tags,
             mod_bases=mod_bases,
             align_info=align_info,
+            next_align=next_align,
         )
 
     def to_align(
@@ -257,14 +281,35 @@ class ReadSeq:
     ) -> AlignedSegment:
         tags = self.tag_str
         if as_unaligned or self.align_info is None:
-            flag = 4
+            flag = SamFlags(unmap=True)
+        else:
+            flag = SamFlags.from_int(self.align_info.flag)
+
+        if as_unaligned or self.next_align is None:
+            next_reference_name = "*"
+            next_reference_start = 0
+            flag.proper_pair = False
+        elif self.next_align:
+            next_reference_name, next_reference_start = self.next_align
+            next_reference_start += 1  # adjust for sam
+            if next_reference_start is None:
+                raise ValueError(self.next_align)
+            if not self.align_info:
+                flag.proper_pair = False
+            elif self.align_info.ref_name == next_reference_name:
+                next_reference_name = "="
+
+        else:
+            raise ValueError(self)
+
+        if as_unaligned or self.align_info is None:
             sam_str = (
                 # QNAME,FLAG,RNAME,POS
-                f"{self.name}\t{flag}\t*\t0\t"
+                f"{self.name}\t{flag.to_int()}\t*\t0\t"
                 # MAPQ,CIGAR
                 f"0\t*\t"
                 # RNEXT,PNEXT,TLEN,
-                "*\t0\t0\t"
+                f"{next_reference_name}\t{next_reference_start}\t0\t"
                 # SEQ, QUAL
                 f"{self.sequence}\t{self.quality}\t"
                 # Optional fields
@@ -273,12 +318,14 @@ class ReadSeq:
         else:
             sam_str = (
                 # QNAME,FLAG,RNAME,POS
-                f"{self.name}\t{self.align_info.flag}\t"
+                f"{self.name}\t{flag.to_int()}\t"
                 f"{self.align_info.ref_name}\t{self.align_info.ref_pos + 1}\t"
                 # MAPQ,CIGAR
                 f"{self.align_info.map_quality}\t{self.align_info.cigar}\t"
-                # RNEXT,PNEXT,TLEN,
-                f"*\t0\t{self.align_info.length}\t"
+                # RNEXT,PNEXT
+                f"{next_reference_name}\t{next_reference_start}\t"
+                # TLEN
+                f"{self.align_info.length}\t"
                 # SEQ, QUAL
                 f"{self.sequence}\t{self.quality}\t"
                 # Optional fields
@@ -326,6 +373,22 @@ class MonomerReadSeq:
     # a ReadSeq consisting of just the sequence/quality/mod_bases of the subread
     coords: ConcatemerCoords
     # the coordinates of the monomer within the concatemer
+
+    @property
+    def is_aligned(self) -> bool:
+        return self.read_seq.align_info is not None
+
+    @staticmethod
+    def generate_id(concatemer_id: str, coords: ConcatemerCoords) -> str:
+        """Create a unique, lexographically sortable monomer_id.
+
+        It's useful to have a monomer id that when lexographically sorted
+        recapitulates the order of the monomers within the original read.
+        To do this we append zero-padding index of the monomer within
+        the concatemer: <read_id>:<zero-padded index of monomer within read>
+        """
+        num_digits = len(str(coords.subread_total))
+        return f"{concatemer_id}:{coords.subread_idx:0{num_digits}d}"
 
     def _update_tags(self):
         self.read_seq.tags["MI"] = f"MI:Z:{self.concatemer_id}"
@@ -424,13 +487,13 @@ class ConcatemerReadSeq:
         num_intervals = len(intervals)
         res = []
         for idx, (start, end) in enumerate(intervals):
-            monomer_id = f"{self.concatemer_id}:{start}:{end}"
             coords = ConcatemerCoords(
                 start=start,
                 end=end,
                 subread_idx=idx,
                 subread_total=num_intervals,
             )
+            monomer_id = MonomerReadSeq.generate_id(self.concatemer_id, coords)
             seq, qual, mm_str, ml_str = get_subread(
                 sequence=self.read_seq.sequence,
                 quality=self.read_seq.quality,
@@ -457,3 +520,106 @@ class ConcatemerReadSeq:
                 )
             )
         return res
+
+
+@dataclass
+class WalkSegment:
+    read_start: int
+    read_end: int
+    chrom: Optional[str] = None
+    genome_start: Optional[int] = None
+    genome_end: Optional[int] = None
+    orientation: Optional[Literal["+", "-"]] = None
+
+    @classmethod
+    def from_monomer(cls, monomer: MonomerReadSeq):
+
+        if monomer.read_seq.align_info is not None:
+            return cls(
+                read_start=monomer.coords.start,
+                read_end=monomer.coords.end,
+                chrom=monomer.read_seq.align_info.ref_name,
+                genome_start=monomer.read_seq.align_info.ref_pos,
+                genome_end=monomer.read_seq.align_info.ref_end,
+                orientation=monomer.read_seq.align_info.strand,
+            )
+        else:
+            return cls(
+                read_start=monomer.coords.start,
+                read_end=monomer.coords.end,
+            )
+
+    @classmethod
+    def from_string(cls, val: str):
+        if val.startswith("*"):
+            try:
+                _, coords = val.split(":")
+                read_start, read_end = map(int, coords.split("-"))
+                return cls(read_start, read_end)
+            except Exception:
+                raise ValueError(f"Error parsing unaligned walk segment from {val}")
+        else:
+            m = WALK_SEGMENT_RE.match(val)
+            if not m:
+                raise ValueError(f"Error parsing aligned walk segment from {val}")
+            else:
+                _ = m.groupdict()
+                return cls(
+                    read_start=int(_["read_start"]),
+                    read_end=int(_["read_end"]),
+                    chrom=_["chrom"],
+                    genome_start=int(_["genome_start"]),
+                    genome_end=int(_["genome_end"]),
+                    orientation=_["orientation"],
+                )
+
+    def to_string(self) -> str:
+        if self.chrom is None:
+            assert (
+                all(
+                    [
+                        _ is None
+                        for _ in (self.genome_start, self.genome_end, self.orientation)
+                    ]
+                )
+                is True
+            )
+            return f"*:{self.read_start}-{self.read_end}"
+        elif ";" in self.chrom:
+            raise ValueError(
+                f"Chromosome name must not include ';' character {self.chrom}"
+            )
+        else:
+            assert (
+                any(
+                    [
+                        _ is None
+                        for _ in (self.genome_start, self.genome_end, self.orientation)
+                    ]
+                )
+                is False
+            )
+            return (
+                f"{self.chrom}:{self.orientation}:"
+                f"{self.genome_start}-{self.genome_end}:"
+                f"{self.read_start}-{self.read_end}"
+            )
+
+
+@dataclass
+class Walk:
+    segments: List[WalkSegment]
+
+    @classmethod
+    def from_aligns(cls, aligns: List[MonomerReadSeq]):
+        return cls([WalkSegment.from_monomer(_) for _ in aligns])
+
+    @classmethod
+    def from_tag(cls, tag: str):
+        # TODO should we check the tag here?
+        _, _, tag_data = tag.split(":", 2)
+        segments = [WalkSegment.from_string(_) for _ in tag_data.split(";")]
+        return cls(segments)
+
+    def to_tag(self) -> str:
+        return "Xc:Z:" + ";".join([_.to_string() for _ in self.segments])

@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING, Iterable, List, Optional, Tuple
 from attrs import define
 
 from .log import get_logger
-from .model import AlignInfo, MonomerReadSeq
+from .model import AlignInfo, MonomerReadSeq, Walk
 from .settings import WALK_TAG
 from .utils import FileCollection, SamFlags
 
@@ -26,7 +26,7 @@ class MappingFileCollection(FileCollection):
 
 
 def group_aligns_by_concatemers(
-    aligns: Iterable[MonomerReadSeq],
+    aligns: Iterable[MonomerReadSeq], sort: bool = True
 ) -> Iterable[Tuple[str, List[MonomerReadSeq]]]:
     seen = set()
     for concat_id, aligns in groupby(aligns, lambda x: x.concatemer_id):
@@ -35,22 +35,28 @@ def group_aligns_by_concatemers(
                 f"Concatemer '{concat_id}' has already been seen, "
                 "these alignments should be sorted by MI tag"
             )
-        yield (concat_id, list(aligns))
+        aligns = list(aligns)
+        if sort:
+            aligns = sorted(aligns, key=lambda x: x.coords.subread_idx)
+        yield (concat_id, aligns)
         seen.add(concat_id)
 
 
 def annotate_monomer_alignments(
     mi_sorted_aligns: Iterable[MonomerReadSeq],
 ) -> Iterable[Tuple[str, List[MonomerReadSeq]]]:
-    for concat_id, aligns in group_aligns_by_concatemers(mi_sorted_aligns):
-        # sort by read position so that we can correctly pair
-        sorted_aligns = sort_aligns_by_concatemer_idx(aligns)
-        align_str = get_concatemer_align_string(sorted_aligns)
+    for concat_id, aligns in group_aligns_by_concatemers(mi_sorted_aligns, sort=True):
+        walk = Walk.from_aligns(aligns)
+        walk_tag = walk.to_tag()
         for a in aligns:
-            set_walk_tag(a, align_str)
-        for (left, right) in get_pairs(sorted_aligns, direct_only=True):
-            set_next_read(left, right)
-        yield (concat_id, sorted_aligns)
+            a.read_seq.tags[WALK_TAG] = walk_tag
+        for (left, right) in get_pairs(aligns, direct_only=True):
+            if right.read_seq.align_info:
+                left.read_seq.next_align = (
+                    right.read_seq.align_info.ref_name,
+                    right.read_seq.align_info.ref_pos,
+                )
+        yield (concat_id, aligns)
 
 
 def sort_aligns_by_concatemer_idx(

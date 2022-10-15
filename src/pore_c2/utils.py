@@ -1,7 +1,8 @@
 import enum
 from contextlib import contextmanager
+from functools import lru_cache
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Literal, Optional, Tuple
 
 import pysam
 from attrs import asdict, define, fields, fields_dict
@@ -107,7 +108,7 @@ class SamFlags:
         return not (self.secondary | self.supplementary)
 
     @property
-    def category(self):
+    def category(self) -> Literal["primary", "secondary", "supplementary", "unmapped"]:
         if self.secondary:
             return "secondary"
         elif self.supplementary:
@@ -116,3 +117,22 @@ class SamFlags:
             return "unmapped"
         else:
             return "primary"
+
+    @property
+    def strand(self) -> Literal["+", "-"]:
+        if self.reverse:
+            return "-"
+        else:
+            return "+"
+
+    @staticmethod
+    @lru_cache
+    def int_to_strand(flag: int) -> Literal["+", "-"]:
+        return SamFlags.from_int(flag).strand
+
+    @staticmethod
+    @lru_cache
+    def int_to_category(
+        flag: int,
+    ) -> Literal["primary", "secondary", "supplementary", "unmapped"]:
+        return SamFlags.from_int(flag).category
