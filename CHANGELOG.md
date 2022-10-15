@@ -1,3 +1,15 @@
+## 0.4.0 (2022-10-15)
+
+### Feat
+
+- **model.py**: set paired end fields and add walk metadata
+- **model.py**: downgrade mm tags to work with pysam, ease roundtrip of tag data
+- **cli.py**: analyse the first n reads
+
+### Fix
+
+- **hatch.toml**: fix type
+
 ## 0.3.0 (2022-10-11)
 
 ### Fix
