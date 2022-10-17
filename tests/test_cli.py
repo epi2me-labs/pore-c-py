@@ -7,7 +7,6 @@ import pytest
 from typer.testing import CliRunner
 
 from pore_c2.cli import (
-    add_phase_info,
     app,
     create_test_data,
     digest_concatemers,
@@ -101,15 +100,3 @@ def test_digest_cli(runner, scenario: Scenario, tmp_path):
         ],
     )
     assert result.exit_code == 0
-
-
-@pytest.mark.skipif(shutil.which("minimap2") is None, reason="minimap2 is not in path")
-def test_add_phase_info(het_scenario: Scenario, coord_sorted_bam, tmp_path):
-    output_bam = tmp_path / "phased.bam"
-    res = add_phase_info(
-        coord_sorted_bam,
-        het_scenario.phased_vcf,
-        output_bam,
-        reference=het_scenario.reference_fasta,
-    )
-    raise ValueError(res)

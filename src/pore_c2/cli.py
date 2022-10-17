@@ -200,18 +200,6 @@ def process_monomer_alignments(bam: Path, output_path: Path):
     return writer
 
 
-@utils.command()
-def add_phase_info(
-    bam: Path, vcf: Path, output_path: Path, reference: Optional[Path] = None
-):
-    logger = get_logger()
-    logger.info(f"Processing reads from {bam}")
-    from pore_c2.variants import get_phased_alignments
-
-    for a in get_phased_alignments(bam=bam, vcf=vcf, reference=reference):
-        pass
-
-
 app.add_typer(utils, name="utils")
 
 if __name__ == "__main__":
