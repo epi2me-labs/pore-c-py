@@ -10,8 +10,7 @@ rule all:
 
 rule pairtools:
   input:
-      # TODO: when pairtools 1.0.1 hits bioconda try this again
-      pairs="output/scenario.processed.pairs"
+      pairs="output/scenario.processed.pairs.gz"
 
 
 rule generate_test_data:
@@ -22,12 +21,14 @@ rule generate_test_data:
         enzyme=config["enzyme"],
     shell:
         "pore-c2 utils create-test-data input/scenario --enzyme {params.enzyme} --seed 421"
+        " --num-haplotypes 2 --variant-density 0.01 --num-concatemers 200 "
 
 
 rule index_genome:
     output:
         metadata="output/scenario.metadata.json",
         mmi="output/scenario.mmi",
+        fai="input/scenario.genome.fasta.fai",
         fragment_fasta="output/scenario.fragments.fasta",
         fragment_table="output/scenario.fragments.parquet",
     input:
@@ -58,6 +59,7 @@ rule map_monomers:
         mmi="output/scenario.mmi",
     log:
         "output/scenario.aligned.bam.out",
+    conda: "minimap"
     shell:
         "(samtools fastq -T '*' {input.ubam} | "
         "minimap2 -ayx  map-ont {input.mmi} - | "
@@ -76,10 +78,18 @@ rule process_monomer_alignments:
 rule pairtools_parse:
     input:
         bam="output/scenario.processed.bam",
+        fai="input/scenario.genome.fasta.fai",
     output:
-        pairs="output/scenario.processed.pairs",
+        pairs="output/scenario.processed.pairs.gz",
+        stats="output/scenario.processed.pairs.stats.txt",
     log:
         pairs="output/scenario.processed.pairs.log",
-    conda: "envs/pairtools.yml"
+    #conda: "envs/pairtools.yml"
+    conda: "pairtools"
     shell:
-        "pairtools parse2 -h  >{output}"
+        "pairtools parse2 -o {output.pairs} --output-stats {output.stats} "
+        "-c {input.fai} "
+        "--single-end "
+        r"""--readid-transform 'readID.split(":")[0]' """
+        "--drop-sam --drop-seq --expand "
+        "{input.bam} "

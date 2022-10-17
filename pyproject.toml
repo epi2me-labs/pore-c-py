@@ -12,13 +12,11 @@ authors = [
 dependencies = [
     "typer>=0.6.1",
     "pysam>=0.19.1",
-    "mappy>=2.24",
     "biopython>=1.79",
-    "pandas>=1.4.3",
     "polars>=0.13.62",
     "attrs>=22.1.0",
-    "cattrs>=22.1.0",
-    "whatshap==1.6.0"
+    "cattrs", # TODO: remove this
+    "mappy" # TODO: maybe remove this
 ]
 requires-python = ">=3.8"
 license = { text = "MIT" }
@@ -30,14 +28,16 @@ pore-c2 = "pore_c2.cli:app"
 [tool.conda-lock]
 platforms = [
   # 'osx-arm64',  uncomment this if bioconda ever adds support
-  'osx-64',
+  # 'osx-64',
   'linux-64'
 ]
 channels = ['conda-forge', 'bioconda', 'defaults']
 
 [tool.conda-lock.dependencies]
 minimap2 = ">=2.24"
-# pairtools = ">=1.0.1"   # not available on bioconda yet
+pairtools = ">=1.0.1"
+cooler = ">0.8.0"
+samtools = "*"
 
 
 [tool.commitizen]
