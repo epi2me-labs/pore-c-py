@@ -121,19 +121,23 @@ def mock_read_w_tags() -> ReadSeq:
 
 
 @pytest.fixture(scope="session")
+def mock_read_w_rg() -> ReadSeq:
+    return ReadSeq(
+        name="read_w_rg",
+        sequence="AACGTTCGAAC",
+        quality="!!00{}22[]]",
+        tags={
+            "RG": "RG:Z:RG01",
+        },
+    )
+
+
+@pytest.fixture(scope="session")
 def mock_reads(
-    mock_read_no_qual: ReadSeq, mock_read_w_qual: ReadSeq, mock_read_w_tags
+    mock_read_no_qual: ReadSeq,
+    mock_read_w_qual: ReadSeq,
+    mock_read_w_tags,
+    mock_read_w_rg,
 ) -> Dict[str, ReadSeq]:
-    reads = [mock_read_no_qual, mock_read_w_qual, mock_read_w_tags]
-    # reads = [
-    #    AlignData(name="read_no_qual", seq="ACTG"),
-    #    AlignData(name="read_w_qual", seq="ACTGACTG", qual="!" * 8),
-    #    AlignData(name="read_w_rg", seq="ACTGACTG", qual="!" * 8, tags=["RG:Z:RG01"]),
-    #    AlignData(
-    #        name="read_w_mods",
-    #        seq="AACGTTCGAAC",
-    #        qual="!!00{}22[]]",
-    #        tags=["RG:Z:RG01", "Mm:Z:C+m,0,1;", "Ml:B:C,122,128"],
-    #    ),
-    # ]
+    reads = [mock_read_no_qual, mock_read_w_qual, mock_read_w_tags, mock_read_w_rg]
     return {r.name: r for r in reads}
