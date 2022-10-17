@@ -18,6 +18,7 @@ dependencies = [
     "polars>=0.13.62",
     "attrs>=22.1.0",
     "cattrs>=22.1.0",
+    "whatshap==1.6.0"
 ]
 requires-python = ">=3.8"
 license = { text = "MIT" }

@@ -20,6 +20,7 @@ from pysam import (
     tabix_index,
 )
 
+from pore_c2.model import AlignInfo, ConcatemerCoords, MonomerReadSeq, ReadSeq
 from pore_c2.monomers import GenomicFragment
 
 from .log import get_logger
@@ -161,9 +162,19 @@ def create_phased_vcf(haplotype_df: pl.DataFrame, vcf: Path, reference_fasta: Pa
     header.add_sample("SAMPLE_01")
     vcf_out = VariantFile(str(uncomp_vcf), "w", header=header)
     vcf_out.close()
+    # raise ValueError(haplotype_df.head())
+    _df = haplotype_df.groupby(["chrom", "pos", "ref", "alt"], maintain_order=True).agg(
+        [
+            pl.col("allele_idx").list()
+            # pl.count(),
+            # pl.concat_str('allele_idx', sep="|")
+            # pl.col('allele_idx').list(),
+            # pl.col('allele_value').list(),
+        ]
+    )
 
     with uncomp_vcf.open("a") as fh:
-        for (chrom, pos, ref, alt, gt0, gt1) in haplotype_df.rows():
+        for (chrom, pos, ref, alt, alleles) in _df.rows():
             # record = vcf_out.new_record(
             #    contig=chrom,
             #    start=pos,
@@ -173,7 +184,8 @@ def create_phased_vcf(haplotype_df: pl.DataFrame, vcf: Path, reference_fasta: Pa
             # )
             # vcf_out.write(record)
             fh.write(
-                f"{chrom}\t{pos}\t.\t{ref}\t{alt}\t.\tPASS\t.\tGT:PS\t{gt0}|{gt1}:0\n"
+                f"{chrom}\t{pos}\t.\t{ref}\t{alt}\t"
+                f".\tPASS\t.\tGT:PS\t{alleles[0]}|{alleles[1]}:0\n"
             )
     tabix_compress(str(uncomp_vcf), str(comp_vcf))
     tabix_index(str(comp_vcf), preset="vcf")
@@ -275,6 +287,9 @@ def simulate_concatemer_fastqs(
     num_haplotypes: int = 0,
     random_state: Optional[Generator] = None,
 ):
+
+    monomers = []
+
     if random_state is None:
         random_state = default_rng()
 
@@ -334,7 +349,7 @@ def simulate_concatemer_fastqs(
         frag_locs = fragments_df[
             pl.Series(path), ["chrom", "start", "end", "fragment_id"]
         ]
-        if snps:
+        if snps is not None:
             frag_locs = frag_locs.join(
                 snps.filter(pl.col("haplotype_id") == f"HT{haplotype}"),
                 on=["chrom", "start", "end", "fragment_id"],
@@ -371,10 +386,31 @@ def simulate_concatemer_fastqs(
                 allele_values=allele_value,
             )
             segments.append(_seq)
+            c_end = c_start + len(_seq)
+            monomer_id = f"{concatemer_id}:{c_start}:{c_end}"
+            monomer = MonomerReadSeq(
+                concatemer_id=concatemer_id,
+                monomer_id=monomer_id,
+                read_seq=ReadSeq(
+                    name=monomer_id,
+                    sequence=_seq,
+                    quality="5" * len(_seq),
+                    align_info=AlignInfo(
+                        ref_name=chrom, ref_pos=start, flag=0, length=end - start
+                    ),
+                ),
+                coords=ConcatemerCoords(
+                    start=c_start,
+                    end=c_end,
+                    subread_idx=monomer_idx,
+                    subread_total=num_monomers,
+                ),
+            )
+            monomers.append(monomer)
+
             if monomer_fh:
-                c_end = c_start + len(_seq)
                 monomer_fh.write(
-                    f"@{concatemer_id}:{c_start}:{c_end}\t"
+                    f"@{monomer.monomer_id}\t"
                     f"MI:Z:{concatemer_id}\t"
                     f"Xc:B:i,{c_start},{c_end},{monomer_idx},{num_monomers}"
                     f"\n{_seq}\n+\n{'5'*len(_seq)}\n"
@@ -386,7 +422,7 @@ def simulate_concatemer_fastqs(
         qual = "5" * len(seq)
         outfh.write(f"@{concatemer_id} {fragment_str}\n{seq}\n+\n{qual}\n")
         data.append({"concatemer_id": concatemer_id, "num_segments": len(segments)})
-    return pl.DataFrame(data, orient="row")
+    return pl.DataFrame(data, orient="row"), monomers
 
 
 @define
@@ -475,7 +511,7 @@ class Scenario:
     def concatemer_fastq(self):
         fastq = self.fc.concatemer_fastq
         if not fastq.exists():
-            self.concatemer_metadata = simulate_concatemer_fastqs(
+            self.concatemer_metadata, self._monomers = simulate_concatemer_fastqs(
                 fastq,
                 self.reference_fasta,
                 self.fragments_df,
@@ -494,6 +530,11 @@ class Scenario:
             _ = self.concatemer_fastq
             assert fastq.exists()
         return fastq
+
+    @property
+    def monomers(self):
+        _ = self.concatemer_fastq
+        return self._monomers
 
     @property
     def namesorted_bam(self):

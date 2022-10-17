@@ -53,7 +53,7 @@ def default_scenario(scenario_dir):
 
 @pytest.fixture(scope="session")
 def het_scenario(scenario_dir):
-    data_dir = scenario_dir / "default"
+    data_dir = scenario_dir / "het"
     data_dir.mkdir()
     s = Scenario(
         chrom_lengths={"chr1": 2000, "chr2": 1000},
@@ -70,7 +70,7 @@ def het_scenario(scenario_dir):
 
 @pytest.fixture(scope="session")
 def large_scenario(scenario_dir):
-    data_dir = scenario_dir / "default"
+    data_dir = scenario_dir / "large"
     data_dir.mkdir()
     s = Scenario(
         chrom_lengths={"chr1": 20_000, "chr2": 1000},
@@ -94,6 +94,19 @@ def name_sorted_bam(default_scenario: Scenario):
         shell=True,
     )
     return ns_bam
+
+
+@pytest.fixture(scope="session")
+def coord_sorted_bam(het_scenario: Scenario):
+    cs_bam = het_scenario.temp_path / "name_sorted.bam"
+    _ = sp.check_output(
+        f"minimap2 -y -ax map-ont "
+        f"{het_scenario.reference_fasta} {het_scenario.monomer_fastq} "
+        f"| samtools sort -o {cs_bam}",
+        stderr=sp.STDOUT,
+        shell=True,
+    )
+    return cs_bam
 
 
 @pytest.fixture(scope="session")
