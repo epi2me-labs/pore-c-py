@@ -75,15 +75,26 @@ def test_create_test_data(tmp_path):
 
 @pytest.mark.skipif(shutil.which("minimap2") is None, reason="minimap2 is not in path")
 def test_process_monomer_alignments(name_sorted_bam, tmp_path):
-    output_bam = tmp_path / "processed.bam"
-    writer = process_monomer_alignments(name_sorted_bam, output_bam)
+    prefix = tmp_path / "processed"
+    monomer_bam = tmp_path / "processed.ns.bam"
+    pe_bam = tmp_path / "processed.pe.bam"
+    writer = process_monomer_alignments(name_sorted_bam, prefix, paired_end=True)
+
     writer.close()
-    output_bam.exists()
+    monomer_bam.exists()
 
     with pysam_verbosity(0):
-        num_aligns = len([a for a in pysam.AlignmentFile(str(output_bam))])
-    assert writer.counter["primary"] > 0
-    assert num_aligns == sum(writer.counter.values())
+        input_aligns = len([a for a in pysam.AlignmentFile(str(name_sorted_bam))])
+
+    with pysam_verbosity(0):
+        num_aligns = len([a for a in pysam.AlignmentFile(str(monomer_bam))])
+    assert num_aligns == sum(writer.ns_writer.counter.values())
+    assert num_aligns == input_aligns
+
+    with pysam_verbosity(0):
+        num_aligns = len([a for a in pysam.AlignmentFile(str(pe_bam))])
+    assert num_aligns == sum(writer.pe_writer.counter.values())
+    assert writer.pe_writer.counter["primary"] > 0
 
 
 # TODO: this might be redundant

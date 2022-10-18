@@ -109,7 +109,7 @@ def concatemer_aligned() -> AlignedSegment:
             next_ref_pos="0",
             next_ref_name="*",
             cigar="11M",
-            length="11",
+            length="0",
         ),
         header=AlignmentHeader.from_dict({"SQ": [{"SN": "chr1", "LN": 1000}]}),
     )
@@ -136,43 +136,6 @@ def test_aligned_round_trip(concatemer_aligned: AlignedSegment):
     assert dest.tostring() == concatemer_aligned.tostring()
 
 
-@pytest.fixture
-def monomer_read_seqs():
-    num_concatemers, aligns_per_concatemer = 2, 10
-    res = []
-    for concat_idx in range(num_concatemers):
-        concatemer_id = f"CONCAT{concat_idx}"
-        for monomer_idx in range(aligns_per_concatemer):
-            start = monomer_idx * 10
-            end = start + 10
-            monomer_id = f"{concatemer_id}:{start}:{end}"
-            m = MonomerReadSeq(
-                concatemer_id=concatemer_id,
-                monomer_id=monomer_id,
-                coords=ConcatemerCoords(
-                    start=start,
-                    end=end,
-                    subread_idx=monomer_idx,
-                    subread_total=aligns_per_concatemer,
-                ),
-                read_seq=ReadSeq(
-                    name=monomer_id,
-                    sequence="A" * 10,
-                    quality="!" * 10,
-                    align_info=AlignInfo(
-                        ref_name=f"chr{monomer_idx + 1}",
-                        ref_pos=100 * monomer_idx,
-                        cigar="10M",
-                        map_quality=20,
-                        length=10,
-                    ),
-                    tags={"MI": f"MI:Z:{concatemer_id}"},
-                ),
-            )
-            res.append(m)
-    return res
-
-
 def test_group_monomer_aligns(monomer_read_seqs):
     num_concatemers, aligns_per_concatemer = 2, 10
     concatemer_ids = set()
@@ -193,8 +156,8 @@ def test_annotate_monomer_aligns(monomer_read_seqs):
     }
     assert len(res) == 2
     for aligns in res.values():
+        assert len(aligns) == 10
         for a in aligns:
-            assert len(aligns) == 10
             a._update_tags()
             tags = a.read_seq.tags
             assert "MI" in tags

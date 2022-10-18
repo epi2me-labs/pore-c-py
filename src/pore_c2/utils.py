@@ -60,18 +60,25 @@ class FileCollection:
 
 @enum.unique
 class SamEnum(enum.IntFlag):
-    paired = 1
-    proper_pair = 2
-    unmap = 4
-    munmap = 8
-    reverse = 16
-    mreverse = 32
-    read1 = 64
-    read2 = 128
-    secondary = 256
-    qcfail = 512
-    dup = 1024
-    supplementary = 2048
+    paired = 1  # template having multiple segments in sequencing
+    proper_pair = 2  # each segment properly aligned according to the aligner
+    unmap = 4  # segment unmapped
+    munmap = 8  # next segment in the template unmapped
+    reverse = 16  # SEQ being reverse complemented
+    mreverse = 32  # SEQ of the next segment in the template being reverse complemented
+    read1 = 64  # the first segment in the template
+    read2 = 128  # the last segment in the template
+    secondary = 256  # secondary alignment
+    qcfail = 512  # not passing filters, such as platform/vendor quality controls
+    dup = 1024  # PCR or optical duplicate
+    supplementary = 2048  # supplementary alignment
+
+
+class AlignCategory(enum.IntEnum):
+    primary = 0
+    unmapped = 1
+    supplementary = 2
+    secondary = 3
 
 
 @define(kw_only=True)
@@ -96,6 +103,10 @@ class SamFlags:
                 res = res | SamEnum[key].value
         return res
 
+    def copy(self):
+        settings = asdict(self)
+        return SamFlags(**settings)
+
     @classmethod
     def from_int(cls, val: int):
         kwds = {}
@@ -108,26 +119,28 @@ class SamFlags:
         return not (self.secondary | self.supplementary)
 
     @property
-    def category(self) -> Literal["primary", "secondary", "supplementary", "unmapped"]:
+    def category(self) -> AlignCategory:
         if self.secondary:
-            return "secondary"
+            return AlignCategory.secondary
         elif self.supplementary:
-            return "supplementary"
+            return AlignCategory.supplementary
         elif self.unmap:
-            return "unmapped"
+            return AlignCategory.unmapped
         else:
-            return "primary"
+            return AlignCategory.primary
 
     @property
-    def strand(self) -> Literal["+", "-"]:
-        if self.reverse:
+    def strand(self) -> Literal["+", "-", "."]:
+        if self.unmap:
+            return "."
+        elif self.reverse:
             return "-"
         else:
             return "+"
 
     @staticmethod
     @lru_cache
-    def int_to_strand(flag: int) -> Literal["+", "-"]:
+    def int_to_strand(flag: int) -> Literal["+", "-", "."]:
         return SamFlags.from_int(flag).strand
 
     @staticmethod

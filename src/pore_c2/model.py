@@ -183,14 +183,15 @@ class AlignInfo:
     flag: int = 4
     map_quality: int = 0
     cigar: str = "*"
+    template_length: int = 0
     length: int = 0
 
     @property
-    def ref_end(self):
+    def ref_end(self) -> int:
         return self.ref_pos + self.length
 
     @property
-    def strand(self):
+    def strand(self) -> Literal["+", "-", "."]:
         return SamFlags.int_to_strand(self.flag)
 
 
@@ -198,6 +199,7 @@ class AlignInfo:
 class ReadSeq:
     name: str
     sequence: str
+    flags: SamFlags = Factory(lambda: SamFlags(unmap=True))
     quality: Optional[str] = None
     mod_bases: Optional[Dict] = None
     align_info: Optional[AlignInfo] = None
@@ -246,14 +248,17 @@ class ReadSeq:
             tags[tag] = tag_tuple_to_str(tag, tag_data, tag_type)
         if as_unaligned or rec.is_unmapped:
             align_info = None
+            flags = SamFlags(unmap=True)
         else:
+            flags = SamFlags.from_int(rec.flag)
             align_info = AlignInfo(
                 ref_name=rec.reference_name,
                 ref_pos=rec.reference_start,
                 flag=rec.flag,
                 map_quality=rec.mapping_quality,
                 cigar=rec.cigarstring,
-                length=rec.template_length,
+                template_length=rec.template_length,
+                length=rec.reference_end - rec.reference_start,
             )
         if init_mod_bases:
             mod_bases = rec.modified_bases
@@ -270,6 +275,7 @@ class ReadSeq:
             name=rec.query_name,
             sequence=rec.query_sequence,
             quality=rec.qual,
+            flags=flags,
             tags=tags,
             mod_bases=mod_bases,
             align_info=align_info,
@@ -277,39 +283,70 @@ class ReadSeq:
         )
 
     def to_align(
-        self, header=DEFAULT_ALIGN_HEADER, as_unaligned: bool = False
+        self,
+        header=DEFAULT_ALIGN_HEADER,
+        **kwds,
     ) -> AlignedSegment:
-        tags = self.tag_str
-        if as_unaligned or self.align_info is None:
-            flag = SamFlags(unmap=True)
+        return AlignedSegment.fromstring(self.to_sam(**kwds), header=header)
+
+    #  TODO: create a dataclass for the to_sam args
+    def to_sam(
+        self,
+        as_unaligned: bool = False,
+        read_name: Optional[str] = None,
+        flag: Optional[SamFlags] = None,
+        strip_tags: bool = False,
+        next_reference_name: str = "*",
+        next_reference_start: int = 0,
+        template_length: Optional[int] = None,
+    ) -> str:
+
+        if read_name is None:
+            read_name = self.name
+        if strip_tags:
+            tags = ""
         else:
-            flag = SamFlags.from_int(self.align_info.flag)
+            tags = self.tag_str
 
-        if as_unaligned or self.next_align is None:
-            next_reference_name = "*"
-            next_reference_start = 0
-            flag.proper_pair = False
-        elif self.next_align:
-            next_reference_name, next_reference_start = self.next_align
-            next_reference_start += 1  # adjust for sam
-            if next_reference_start is None:
-                raise ValueError(self.next_align)
-            if not self.align_info:
-                flag.proper_pair = False
-            elif self.align_info.ref_name == next_reference_name:
-                next_reference_name = "="
+        is_unmapped = as_unaligned or self.align_info is None
 
-        else:
-            raise ValueError(self)
+        if flag is None:
+            flag = self.flags.copy()  # no side-effects
 
-        if as_unaligned or self.align_info is None:
+        if is_unmapped and not flag.unmap:
+            # TODO: should we check other flags here too
+            flag.unmap = True
+
+        if is_unmapped or flag.paired is False:
+            template_length = 0
+        elif template_length is None:
+            template_length = self.align_info.template_length
+
+        # if as_unaligned or self.next_align is None:
+        #    next_reference_name = "*"
+        #    next_reference_start = 0
+        #    flag.proper_pair = False
+        # elif self.next_align:
+        #    next_reference_name, next_reference_start = self.next_align
+        #    next_reference_start += 1  # adjust for sam
+        #    if next_reference_start is None:
+        #        raise ValueError(self.next_align)
+        #    if not self.align_info:
+        #        flag.proper_pair = False
+        #    elif self.align_info.ref_name == next_reference_name:
+        #        next_reference_name = "="
+
+        # else:
+        #    raise ValueError(self)
+
+        if is_unmapped:
             sam_str = (
                 # QNAME,FLAG,RNAME,POS
-                f"{self.name}\t{flag.to_int()}\t*\t0\t"
+                f"{read_name}\t{flag.to_int()}\t*\t0\t"
                 # MAPQ,CIGAR
                 f"0\t*\t"
                 # RNEXT,PNEXT,TLEN,
-                f"{next_reference_name}\t{next_reference_start}\t0\t"
+                f"{next_reference_name}\t{next_reference_start}\t{template_length}\t"
                 # SEQ, QUAL
                 f"{self.sequence}\t{self.quality}\t"
                 # Optional fields
@@ -318,20 +355,20 @@ class ReadSeq:
         else:
             sam_str = (
                 # QNAME,FLAG,RNAME,POS
-                f"{self.name}\t{flag.to_int()}\t"
+                f"{read_name}\t{flag.to_int()}\t"
                 f"{self.align_info.ref_name}\t{self.align_info.ref_pos + 1}\t"
                 # MAPQ,CIGAR
                 f"{self.align_info.map_quality}\t{self.align_info.cigar}\t"
                 # RNEXT,PNEXT
                 f"{next_reference_name}\t{next_reference_start}\t"
                 # TLEN
-                f"{self.align_info.length}\t"
+                f"{template_length}\t"
                 # SEQ, QUAL
                 f"{self.sequence}\t{self.quality}\t"
                 # Optional fields
                 f"{tags}"
             )
-        return AlignedSegment.fromstring(sam_str, header=header)
+        return sam_str
 
 
 @define(kw_only=True, frozen=True)

@@ -13,6 +13,8 @@ from pore_c2 import __version__
 from .aligns import annotate_monomer_alignments
 from .index import IndexFileCollection, IndexMetadata
 from .io import (
+    AnnotatedMonomerFC,
+    AnnotatedMonomerWriter,
     find_files,
     get_alignment_header,
     get_concatemer_seqs,
@@ -177,21 +179,32 @@ def create_test_data(
 
 
 @utils.command()
-def process_monomer_alignments(bam: Path, output_path: Path):
+def process_monomer_alignments(
+    bam: Path,
+    output_prefix: Path,
+    force: bool = False,
+    monomers: bool = True,
+    paired_end: bool = False,
+):
     logger = get_logger()
     logger.info(f"Processing reads from {bam}")
     input_files = [bam]
+    drop_outputs = []
+    for flag, filekey in [(monomers, "namesorted_bam"), (paired_end, "paired_end_bam")]:
+        if not flag:
+            drop_outputs.append(filekey)
+    output_files = AnnotatedMonomerFC.with_prefix(output_prefix, drop=drop_outputs)
+    if output_files.exists_any() and not force:
+        logger.error(
+            "Some of the outputs already exist, please remove before continuing"
+        )
+        raise IOError
     header = get_alignment_header(source_files=input_files)
-    writer = get_monomer_writer(output_path, header=header)
-
     monomer_aligns = get_monomer_aligns(input_files)
-    annotated_stream = (
-        m.read_seq
-        for (_, monomers) in annotate_monomer_alignments(monomer_aligns)
-        for m in monomers
-    )
-
-    with closing(get_monomer_writer(output_path, header=header)) as writer:
+    annotated_stream = annotate_monomer_alignments(monomer_aligns)
+    with closing(
+        AnnotatedMonomerWriter.from_file_collection(output_files, header=header)
+    ) as writer:
         writer.consume(annotated_stream)
     # logger.info(
     #    f"Wrote {writer.base_counter:,} bases in "

@@ -1,14 +1,17 @@
+import enum
 from collections import Counter
+from dataclasses import dataclass
+from functools import lru_cache
 from itertools import combinations, groupby
 from pathlib import Path
-from typing import TYPE_CHECKING, Iterable, List, Optional, Tuple
+from typing import TYPE_CHECKING, Iterable, List, Literal, Optional, Tuple
 
 from attrs import define
 
 from .log import get_logger
 from .model import AlignInfo, MonomerReadSeq, Walk
 from .settings import WALK_TAG
-from .utils import FileCollection, SamFlags
+from .utils import AlignCategory, FileCollection, SamFlags
 
 logger = get_logger()
 
@@ -42,21 +45,50 @@ def group_aligns_by_concatemers(
         seen.add(concat_id)
 
 
+def pick_walk_aligns(aligns: List[MonomerReadSeq], concat_id: str) -> List[bool]:
+    expected_monomers = aligns[0].coords.subread_total
+    keep = [False] * len(aligns)
+
+    # pick one alignment per-monomer to use in the walk
+    for monomer_id, cats in groupby(
+        [(_.monomer_id, x, _.read_seq.flags.category) for x, _ in enumerate(aligns)],
+        lambda x: x[0],
+    ):
+        # sort by category enum (int enum so get the order):
+        #  primary,unmapped,secondary,supplementary
+        cats = sorted(cats, key=lambda x: x[2])
+        for y, (_, idx, cat) in enumerate(cats):
+            if y == 0:  # the pass alignment
+                aligns[idx].read_seq.flags.qcfail = False
+                keep[idx] = True
+                if cat not in (AlignCategory.primary, AlignCategory.unmapped):
+                    logger.warning(
+                        f"Warning: best alignment for monomer: {monomer_id} "
+                        f"has category {cat.name}"
+                    )
+            else:
+                aligns[idx].read_seq.flags.qcfail = True
+    num_pass = sum(keep)
+    if num_pass != expected_monomers:
+        logger.warning(
+            f"Expected to see {expected_monomers} alignments for "
+            f"concatemer {concat_id}, found {num_pass}"
+        )
+    return keep
+
+
 def annotate_monomer_alignments(
     mi_sorted_aligns: Iterable[MonomerReadSeq],
+    remove_qcfail: bool = True,
 ) -> Iterable[Tuple[str, List[MonomerReadSeq]]]:
     for concat_id, aligns in group_aligns_by_concatemers(mi_sorted_aligns, sort=True):
-        walk = Walk.from_aligns(aligns)
+        keep = pick_walk_aligns(aligns, concat_id)
+        pass_aligns = [a for x, a in enumerate(aligns) if keep[x]]
+        walk = Walk.from_aligns(pass_aligns)
         walk_tag = walk.to_tag()
-        for a in aligns:
+        for a in pass_aligns:
             a.read_seq.tags[WALK_TAG] = walk_tag
-        for (left, right) in get_pairs(aligns, direct_only=True):
-            if right.read_seq.align_info:
-                left.read_seq.next_align = (
-                    right.read_seq.align_info.ref_name,
-                    right.read_seq.align_info.ref_pos,
-                )
-        yield (concat_id, aligns)
+        yield (concat_id, pass_aligns if remove_qcfail else aligns)
 
 
 def sort_aligns_by_concatemer_idx(
@@ -85,13 +117,13 @@ def sort_aligns_by_concatemer_idx(
 
 def get_pairs(
     sorted_aligns: List[MonomerReadSeq], direct_only: bool = False
-) -> Iterable[Tuple[MonomerReadSeq, MonomerReadSeq]]:
+) -> Iterable[Tuple[MonomerReadSeq, MonomerReadSeq, "PairData"]]:
     if direct_only:
         pairs = zip(sorted_aligns[:-1], sorted_aligns[1:])
     else:
         pairs = combinations(sorted_aligns, 2)
-    for left, right in pairs:
-        yield (left, right)
+    for x, (left, right) in enumerate(pairs):
+        yield (left, right, PairData.from_monomer_pair(left, right, pair_idx=x))
 
 
 def set_walk_tag(align: MonomerReadSeq, walk_str: str):
@@ -108,36 +140,155 @@ def set_next_read(left: MonomerReadSeq, right: MonomerReadSeq):
     #    left.next_ref_pos = right.ref_pos
 
 
-@define
+class PairAlignState(enum.IntEnum):
+    both = 0
+    left = 1
+    right = 2
+    neither = 4
+
+    @lru_cache
+    @staticmethod
+    def from_flags(left_mapped: bool, right_mapped: bool) -> "PairAlignState":
+        if left_mapped and right_mapped:
+            return PairAlignState.both
+        elif not (left_mapped or right_mapped):
+            return PairAlignState.neither
+        elif left_mapped:
+            return PairAlignState.left
+        elif right_mapped:
+            return PairAlignState.right
+        else:
+            raise ValueError
+
+
+@dataclass
 class PairData:
+    concatemer_id: str
+    pair_idx: int
     is_direct: bool
     read_distance: int
-    both_aligned: bool
+    align_state: PairAlignState
     is_cis: Optional[bool] = None
-    genome_distance: int = -1
+    genome_distance: Optional[int] = None
+    relative_ori: Optional[bool] = None
 
-
-def get_pair_data(left: MonomerReadSeq, right: MonomerReadSeq) -> PairData:
-    md_l, md_r = (
-        left.concatemer_metadata,
-        right.concatemer_metadata,
-    )
-    is_direct = (md_r.subread_idx - md_l.subread_idx) == 1
-    aligned_l, aligned_r = left.flag != 4, right.flag != 4
-    both_aligned = aligned_l & aligned_r
-    read_distance = md_r.start - md_l.end
-    if not both_aligned:
-        return PairData(is_direct, read_distance, both_aligned)
-    else:
-        is_cis = left.ref_name == right.ref_name
-        if is_cis:
-            if left.ref_pos < right.ref_pos:
-                genome_distance = right.ref_pos - (left.ref_pos + left.length)
-            else:
-                genome_distance = right.ref_pos - (right.ref_pos + right.length)
+    def to_flags(
+        self, align_flags: Tuple[SamFlags, SamFlags]
+    ) -> Tuple[SamFlags, SamFlags]:
+        if self.align_state == PairAlignState.both:
+            flags = (
+                SamFlags(proper_pair=self.is_cis is True),
+                SamFlags(proper_pair=self.is_cis is True),
+            )
+        elif self.align_state == PairAlignState.left:
+            flags = (SamFlags(munmap=True), SamFlags(unmap=True))
+        elif self.align_state == PairAlignState.right:
+            flags = (SamFlags(unmap=True), SamFlags(munmap=True))
+        elif self.align_state == PairAlignState.neither:
+            flags = (
+                SamFlags(unmap=True, munmap=True),
+                SamFlags(unmap=True, munmap=True),
+            )
         else:
-            genome_distance = -1
-        return PairData(is_direct, read_distance, both_aligned, is_cis, genome_distance)
+            raise ValueError(self.align_state)
+        for x, f in enumerate(flags):
+            f.paired = True
+            if x == 0:
+                f.mreverse = align_flags[1].mreverse
+                f.read1 = True
+            else:
+                f.mreverse = align_flags[0].mreverse
+                f.read2 = True
+            flags[x].supplementary = align_flags[x].supplementary
+            flags[x].secondary = align_flags[x].secondary
+        return flags
+
+        # l_flag, r_flag = left.flags.copy(), right.flags.copy()
+        # l_flag.read2, r_flag.read1 = False, False
+        # l_flag.read1, r_flag.read2 = True, True
+        # l_flag.proper_pair, r_flag.proper_pair = proper_pair, proper_pair
+
+        # if right.align_info:
+        #    l_flag.munmap = False
+        #    l_flag.mreverse = right.align_info.strand == "-"
+        #    if left.align_info is not None:
+        #        next_ref = (
+        #            "="
+        #            if (left.align_info.ref_name == right.align_info.ref_name)
+        #            else right.align_info.ref_name
+        #        )
+        #    else:
+        #        next_ref = right.align_info.ref_name
+        #    next_pos = right.align_info.ref_pos + 1
+        #    self.write_record(
+        #        left,
+        #        read_name=l_read_name,
+        #        flag=l_flag,
+        #        next_reference_name=next_ref,
+        #        next_reference_start=next_pos,
+        #    )
+        # else:
+        #    l_flag.munmap = True
+
+        # raise NotImplementedError
+
+    @classmethod
+    def from_monomer_pair(
+        cls, left: MonomerReadSeq, right: MonomerReadSeq, pair_idx: int = -1
+    ) -> "PairData":
+        concatemer_id = left.concatemer_id
+        md_l, md_r = (
+            left.coords,
+            right.coords,
+        )
+        is_direct = (md_r.subread_idx - md_l.subread_idx) == 1
+        read_distance = md_r.start - md_l.end
+        align_state = PairAlignState.from_flags(
+            left.read_seq.flags.unmap is False, right.read_seq.flags.unmap is False
+        )
+        if not (align_state == PairAlignState.both):
+            return PairData(
+                concatemer_id, pair_idx, is_direct, read_distance, align_state
+            )
+        else:
+            l_align = left.read_seq.align_info
+            r_align = right.read_seq.align_info
+            is_cis = l_align.ref_name == r_align.ref_name
+            if is_cis:
+                strands = (
+                    l_align.strand,
+                    r_align.strand,
+                )
+                if "." in strands:
+                    relative_ori = None
+                else:
+                    relative_ori = strands[0] == strands[1]
+                genome_distance = calculate_genomic_distance(
+                    (l_align.strand, l_align.ref_pos, l_align.ref_end),
+                    (r_align.strand, r_align.ref_pos, r_align.ref_end),
+                )
+            else:
+                relative_ori = None
+                genome_distance = None
+            return PairData(
+                concatemer_id,
+                pair_idx,
+                is_direct,
+                read_distance,
+                align_state,
+                is_cis,
+                genome_distance,
+                relative_ori,
+            )
+
+
+def calculate_genomic_distance(
+    left: Tuple[Literal["+", "-"], int, int],
+    right: Tuple[Literal["+", "-"], int, int],
+):
+    l_coord = left[2] if left[0] == "+" else left[1]
+    r_coord = right[1] if right[0] == "+" else right[2]
+    return r_coord - l_coord
 
 
 def get_concatemer_align_string(sorted_aligns: List[MonomerReadSeq]) -> str:

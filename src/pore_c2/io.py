@@ -1,13 +1,16 @@
 from collections import Counter
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Iterable, List, Literal, Mapping, Optional, Tuple, TypeVar, Union
 
+from attrs import define
 from pysam import AlignmentFile, AlignmentHeader, FastaFile, FastxFile
 
+from .aligns import get_pairs
 from .log import get_logger
 from .model import ConcatemerReadSeq, MonomerReadSeq, ReadSeq, downgrade_mm_tag
 from .settings import DEFAULT_ALIGN_HEADER, DOWNGRADE_MM
-from .utils import SamFlags, pysam_verbosity
+from .utils import FileCollection, SamFlags, pysam_verbosity
 
 T = TypeVar("T", ReadSeq, ConcatemerReadSeq, MonomerReadSeq)
 
@@ -16,6 +19,13 @@ FASTQ_EXTS = [".fastq", ".fastq.gz", ".fq", ".fastq.gz"]
 FASTA_EXTS = [".fasta", ".fa", ".fasta.gz", ".fasta.gz"]
 SAM_EXTS = [".sam", ".bam", ".cram"]
 logger = get_logger()
+
+
+@define
+class AnnotatedMonomerFC(FileCollection):
+    namesorted_bam: Path = Path("{prefix}.ns.bam")
+    paired_end_bam: Path = Path("{prefix}.pe.bam")
+    concatemers: Path = Path("{prefix}.concatemers.parquet")
 
 
 def get_concatemer_seqs(paths: List[Path]) -> Iterable[ConcatemerReadSeq]:
@@ -44,6 +54,7 @@ class Writer:
         p = str(path)
         for e in SAM_EXTS:
             if p.endswith(e):
+                assert header is not None
                 return SamWriter(path, as_unaligned=as_unaligned, header=header)
         for e in FASTQ_EXTS[:2]:
             if p.endswith(e):
@@ -86,7 +97,6 @@ class SamWriter(Writer):
         self.header = header
         self.as_unaligned = as_unaligned
         self.counter = Counter()
-
         if self.path.suffix == ".bam":
             mode = "wb"
         elif self.path.suffix == ".sam":
@@ -97,13 +107,149 @@ class SamWriter(Writer):
             raise NotImplementedError(self.path.suffix)
         self.writer = AlignmentFile(str(path), mode=mode, header=header)
 
-    def write_record(self, rec: ReadSeq):
-        align = rec.to_align(header=self.header, as_unaligned=self.as_unaligned)
-        self.counter[SamFlags.from_int(align.flag).category] += 1
+    def write_record(self, rec: ReadSeq, **kwds):
+        align = rec.to_align(header=self.header, as_unaligned=self.as_unaligned, **kwds)
+        self.counter[SamFlags.from_int(align.flag).category.name] += 1
         self.writer.write(align)
 
     def close(self):
         self.writer.close()
+
+
+class PairedEndWriter(SamWriter):
+    def write_records(
+        self, concatemer_id: str, recs: List[MonomerReadSeq], direct_only: bool = True
+    ):
+        if len(recs) == 1:
+            self.write_record(recs[0].read_seq)
+        else:
+            walk = [_ for _ in recs if _.read_seq.flags.qcfail is False]
+            if len(walk) == 1:
+                self.write_record(walk[0].read_seq)
+            else:
+                for (left, right, pair_data) in get_pairs(
+                    walk, direct_only=direct_only
+                ):
+                    l_flag, r_flag = pair_data.to_flags(
+                        align_flags=(left.read_seq.flags, right.read_seq.flags)
+                    )
+                    l_sam_kwds, r_sam_kwds = {}, {}
+                    if not l_flag.munmap:
+                        l_sam_kwds["next_reference_name"] = (
+                            "="
+                            if pair_data.is_cis is True
+                            else right.read_seq.align_info.ref_name
+                        )
+                        l_sam_kwds[
+                            "next_reference_start"
+                        ] = right.read_seq.align_info.ref_pos
+                    if not r_flag.munmap:
+                        r_sam_kwds["next_reference_name"] = (
+                            "="
+                            if pair_data.is_cis is True
+                            else left.read_seq.align_info.ref_name
+                        )
+                        r_sam_kwds[
+                            "next_reference_start"
+                        ] = left.read_seq.align_info.ref_pos
+                    if pair_data.is_cis:
+                        template_length = max(
+                            left.read_seq.align_info.ref_end,
+                            right.read_seq.align_info.ref_end,
+                        ) - min(
+                            left.read_seq.align_info.ref_pos,
+                            right.read_seq.align_info.ref_pos,
+                        )
+                    else:
+                        template_length = 0
+
+                    self.write_record(
+                        left.read_seq,
+                        flag=l_flag,
+                        template_length=template_length,
+                        **l_sam_kwds,
+                    )
+                    self.write_record(
+                        right.read_seq,
+                        flag=r_flag,
+                        template_length=template_length,
+                        **r_sam_kwds,
+                    )
+
+                #    raise ValueError(l_flag, r_flag)
+                # for pair_idx, (left, right) in enumerate(zip(walk[:-1], walk[1:])):
+                #    proper_pair = ~(left.flags.unmap or right.flags.unmap)
+                #    pair_id = f"{concatemer_id}:{pair_idx}"
+                #    l_read_name, r_read_name = pair_id + "/1", pair_id + "/2"
+                #    l_flag, r_flag = left.flags.copy(), right.flags.copy()
+                #    l_flag.read2, r_flag.read1 = False, False
+                #    l_flag.read1, r_flag.read2 = True, True
+                #    l_flag.proper_pair, r_flag.proper_pair = proper_pair, proper_pair
+
+                #    if right.align_info:
+                #        l_flag.munmap = False
+                #        l_flag.mreverse = right.align_info.strand == "-"
+                #        if left.align_info is not None:
+                #            next_ref = (
+                #                "="
+                #                if (
+                #                    left.align_info.ref_name
+                #                    == right.align_info.ref_name
+                #                )
+                #                else right.align_info.ref_name
+                #            )
+                #        else:
+                #            next_ref = right.align_info.ref_name
+                #        next_pos = right.align_info.ref_pos + 1
+                #        self.write_record(
+                #            left,
+                #            read_name=l_read_name,
+                #            flag=l_flag,
+                #            next_reference_name=next_ref,
+                #            next_reference_start=next_pos,
+                #        )
+                #    else:
+                #        l_flag.munmap = True
+                #        self.write_record(left, flag=l_flag)
+                #    self.write_record(right, read_name=r_read_name, flag=r_flag)
+
+            if len(walk) != len(recs):
+                for rec in recs:
+                    if rec.flags.qcfail:
+                        self.write_record(rec.read_seq)
+
+
+@dataclass
+class AnnotatedMonomerWriter(Writer):
+    ns_writer: Optional[SamWriter] = None
+    pe_writer: Optional[PairedEndWriter] = None
+
+    @classmethod
+    def from_file_collection(
+        cls, fc: AnnotatedMonomerFC, header: AlignmentHeader = DEFAULT_ALIGN_HEADER
+    ):
+        ns_writer = (
+            SamWriter(fc.namesorted_bam, header=header) if fc.namesorted_bam else None
+        )
+        pe_writer = (
+            PairedEndWriter(fc.paired_end_bam, header=header)
+            if fc.paired_end_bam
+            else None
+        )
+        return cls(ns_writer=ns_writer, pe_writer=pe_writer)
+
+    def consume(self, annotated_stream: Iterable[Tuple[str, List[MonomerReadSeq]]]):
+        for concatemer_id, read_seqs in annotated_stream:
+            if self.ns_writer:
+                [self.ns_writer.write_record(_.read_seq) for _ in read_seqs]
+            if self.pe_writer:
+                self.pe_writer.write_records(concatemer_id, read_seqs)
+
+    def close(self):
+        if self.ns_writer:
+            self.ns_writer.close()
+        if self.pe_writer:
+            self.pe_writer.close()
 
 
 def get_monomer_writer(
@@ -166,7 +312,6 @@ def iter_reads(
 def find_files(
     root: Path, glob: str = "*.fastq", recursive: bool = True
 ) -> Iterable[Path]:
-
     if not root.is_dir():
         yield root
     else:

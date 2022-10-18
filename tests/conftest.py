@@ -6,7 +6,7 @@ import pytest
 from numpy.random import default_rng
 from typer.testing import CliRunner
 
-from pore_c2.model import ReadSeq
+from pore_c2.model import AlignInfo, ConcatemerCoords, MonomerReadSeq, ReadSeq
 from pore_c2.testing import Scenario
 
 
@@ -154,3 +154,40 @@ def mock_reads(
 ) -> Dict[str, ReadSeq]:
     reads = [mock_read_no_qual, mock_read_w_qual, mock_read_w_tags, mock_read_w_rg]
     return {r.name: r for r in reads}
+
+
+@pytest.fixture
+def monomer_read_seqs():
+    num_concatemers, aligns_per_concatemer = 2, 10
+    res = []
+    for concat_idx in range(num_concatemers):
+        concatemer_id = f"CONCAT{concat_idx}"
+        for monomer_idx in range(aligns_per_concatemer):
+            start = monomer_idx * 10
+            end = start + 10
+            monomer_id = f"{concatemer_id}:{start}:{end}"
+            m = MonomerReadSeq(
+                concatemer_id=concatemer_id,
+                monomer_id=monomer_id,
+                coords=ConcatemerCoords(
+                    start=start,
+                    end=end,
+                    subread_idx=monomer_idx,
+                    subread_total=aligns_per_concatemer,
+                ),
+                read_seq=ReadSeq(
+                    name=monomer_id,
+                    sequence="A" * 10,
+                    quality="!" * 10,
+                    align_info=AlignInfo(
+                        ref_name=f"chr{monomer_idx + 1}",
+                        ref_pos=100 * monomer_idx,
+                        cigar="10M",
+                        map_quality=20,
+                        length=10,
+                    ),
+                    tags={"MI": f"MI:Z:{concatemer_id}"},
+                ),
+            )
+            res.append(m)
+    return res

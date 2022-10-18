@@ -1,3 +1,4 @@
+from enum import IntFlag
 from pathlib import Path
 
 from attrs import define, fields_dict
@@ -39,3 +40,62 @@ def test_sam_flags():
     assert flags == SamFlags(
         unmap=True, secondary=True, qcfail=True, dup=True, supplementary=True
     )
+
+
+# TODO: move into main file
+class SamBits(IntFlag):
+    paired = 1  # template having multiple segments in sequencing
+    proper_pair = 2  # each segment properly aligned according to the aligner
+    unmap = 4  # segment unmapped
+    munmap = 8  # next segment in the template unmapped
+    reverse = 16  # SEQ being reverse complemented
+    mreverse = 32  # SEQ of the next segment in the template being reverse complemented
+    read1 = 64  # the first segment in the template
+    read2 = 128  # the last segment in the template
+    secondary = 256  # secondary alignment
+    qcfail = 512  # not passing filters, such as platform/vendor quality controls
+    dup = 1024  # PCR or optical duplicate
+    supplementary = 2048  # supplementary alignment
+
+
+def is_primary(flag: int):
+    return bool(flag & ~(SamBits.supplementary | SamBits.secondary | SamBits.unmap))
+
+
+def test_mask():
+    f = SamFlags(unmap=True, secondary=True).to_int()
+    assert bool(f & SamBits.unmap)
+    # assert(bool(SamEnum['unmap'].value & f.to_int()) is True)
+
+
+def test_align_categories():
+    flags = [
+        SamFlags(unmap=True),
+        SamFlags(secondary=True),
+        SamFlags(supplementary=True),
+        SamFlags(),
+    ]
+    categories = [_.category for _ in flags]
+    assert [c.name for c in categories] == [
+        "unmapped",
+        "secondary",
+        "supplementary",
+        "primary",
+    ]
+    assert [c.name for c in sorted(categories)] == [
+        "primary",
+        "unmapped",
+        "supplementary",
+        "secondary",
+    ]
+
+
+def test_strand():
+    flags = [
+        SamFlags(),
+        SamFlags(reverse=True),
+        SamFlags(unmap=True),
+        SamFlags(secondary=True),
+    ]
+    strands = [SamFlags.int_to_strand(_.to_int()) for _ in flags]
+    assert strands == ["+", "-", ".", "+"]
