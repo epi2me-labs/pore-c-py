@@ -1,3 +1,10 @@
+## 0.5.0 (2022-10-21)
+
+### Fix
+
+- **variants.py**: remove partial phasing code
+- **testing.py**: fix phased vcf generation
+
 ## 0.4.0 (2022-10-15)
 
 ### Feat
