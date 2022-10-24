@@ -146,8 +146,8 @@ class PairAlignState(enum.IntEnum):
     right = 2
     neither = 4
 
-    @lru_cache
     @staticmethod
+    @lru_cache(maxsize=256)
     def from_flags(left_mapped: bool, right_mapped: bool) -> "PairAlignState":
         if left_mapped and right_mapped:
             return PairAlignState.both
