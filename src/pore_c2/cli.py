@@ -174,7 +174,7 @@ def create_test_data(
     logger.info(f"Genome fasta: {scenario.reference_fasta}")
     logger.info(f"Concatemer fastq: {scenario.concatemer_fastq}")
     if num_haplotypes >= 2 and variant_density > 0:
-        logger.info(f"Phased VCF: {scenario.concatemer_fastq}")
+        logger.info(f"Phased VCF: {scenario.phased_vcf}")
     return scenario
 
 

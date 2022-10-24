@@ -1,22 +1,28 @@
 config["enzyme"] = "NlaIII"
 
+CONDA_ENV_NAME = "porec2_dev"
+
 
 rule all:
     input:
         genome="input/scenario.genome.fasta",
         metadata="output/scenario.metadata.json",
         ubam="output/scenario.monomers.bam",
-        bam="output/scenario.processed.bam",
+        bam="output/scenario.processed.ns.bam",
 
-rule pairtools:
-  input:
-      pairs="output/scenario.processed.pairs.gz"
+
+rule full:
+    input:
+        pairs="output/scenario.processed.pairs.gz",
+        ht_bam="output/scenario.processed.ns.hp.bam",
+        cooler="output/scenario.processed.mcool",
 
 
 rule generate_test_data:
     output:
         genome="input/scenario.genome.fasta",
         concatemers="input/scenario.concatemers.fastq",
+        vcf="input/scenario.phased_variants.vcf.gz",
     params:
         enzyme=config["enzyme"],
     shell:
@@ -59,7 +65,8 @@ rule map_monomers:
         mmi="output/scenario.mmi",
     log:
         "output/scenario.aligned.bam.out",
-    conda: "minimap"
+    conda:
+        CONDA_ENV_NAME
     shell:
         "(samtools fastq -T '*' {input.ubam} | "
         "minimap2 -ayx  map-ont {input.mmi} - | "
@@ -68,24 +75,27 @@ rule map_monomers:
 
 rule process_monomer_alignments:
     output:
-        bam="output/scenario.processed.bam",
+        bam="output/scenario.processed.ns.bam",
     input:
         bam="output/scenario.aligned.bam",
+    params:
+        prefix="output/scenario.processed",
     shell:
-        "pore-c2 utils process-monomer-alignments {input} {output}"
+        "pore-c2 utils process-monomer-alignments {input} {params.prefix}"
 
 
 rule pairtools_parse:
     input:
-        bam="output/scenario.processed.bam",
+        bam="output/scenario.processed.ns.bam",
         fai="input/scenario.genome.fasta.fai",
     output:
         pairs="output/scenario.processed.pairs.gz",
         stats="output/scenario.processed.pairs.stats.txt",
     log:
         pairs="output/scenario.processed.pairs.log",
-    #conda: "envs/pairtools.yml"
-    conda: "pairtools"
+    # conda: "envs/pairtools.yml"
+    conda:
+        CONDA_ENV_NAME
     shell:
         "pairtools parse2 -o {output.pairs} --output-stats {output.stats} "
         "-c {input.fai} "
@@ -93,3 +103,67 @@ rule pairtools_parse:
         r"""--readid-transform 'readID.split(":")[0]' """
         "--drop-sam --drop-seq --expand "
         "{input.bam} "
+
+
+rule pairs_to_cooler:
+    output:
+        cooler="output/scenario.processed.cooler",
+    input:
+        pairs="output/scenario.processed.pairs.gz",
+        fai="input/scenario.genome.fasta.fai",
+    log:
+        pairs="output/scenario.processed.cooler.log",
+    params:
+        bin_size=10,
+    # conda: "envs/pairtools.yml"
+    conda:
+        CONDA_ENV_NAME
+    shell:
+        "cooler cload pairs "
+        "-c1 2 -p1 3 -c2 4 -p2 5 "
+        "{input.fai}:{params.bin_size} {input.pairs} {output} 2>{log}"
+
+
+rule zoomify_cooler:
+    input:
+        cooler="output/scenario.processed.cooler",
+    output:
+        cooler="output/scenario.processed.mcool",
+    log:
+        pairs="output/scenario.processed.mcool.log",
+    params:
+        resolution="10,20,50",
+    conda:
+        CONDA_ENV_NAME
+    shell:
+        "cooler zoomify -r {params.resolution} -o {output} {input} 2>{log}"
+
+
+rule sort_monomers:
+    input:
+        bam="output/scenario.processed.ns.bam",
+    output:
+        bam="output/scenario.processed.ns.sorted.bam",
+    conda:
+        CONDA_ENV_NAME
+    shell:
+        "samtools sort --write-index -o {output.bam} {input.bam}"
+
+
+rule whatshap_haplotag:
+    input:
+        bam="output/scenario.processed.ns.sorted.bam",
+        fasta="input/scenario.genome.fasta",
+        vcf="input/scenario.phased_variants.vcf.gz",
+    output:
+        ht_bam="output/scenario.processed.ns.hp.bam",
+        ht_reads="output/scenario.processed.ns.hp.txt,gz",
+    log:
+        "output/scenario.processed.haplotagged.log",
+    conda:
+        CONDA_ENV_NAME
+    shell:
+        "whatshap haplotag --reference {input.fasta} "
+        "-o {output.ht_bam} --output-haplotag-list {output.ht_reads} "
+        "--ignore-read-groups "
+        "{input.vcf} {input.bam} 2>{log}"

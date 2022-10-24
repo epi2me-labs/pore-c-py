@@ -1,12 +1,12 @@
 - name: stepwise
-  command: snakemake --cores 1  --snakefile Snakefile
+  command: snakemake --cores 1  --use-conda --snakefile Snakefile
   tags:
     - stepwise
   files:
     - path: "input/scenario.genome.fasta"
 
-- name: pairtools
-  command: snakemake --cores 1  --snakefile Snakefile
+- name: full
+  command: snakemake --cores 1  --use-conda --snakefile Snakefile full
   tags:
     - integration
   files:

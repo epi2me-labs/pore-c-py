@@ -14,10 +14,15 @@ cov = ["coverage run --module pytest", "coverage report --show-missing"]
 dependencies = [
     "snakemake>=7.14.0",
     "pytest-workflow>=1.6.0",
+    "conda-lock"
 ]
 
 [envs.integration.scripts]
 test = "pytest -c tests/workflow/pytest.ini  tests/workflow/"
+lock = "conda-lock -f pyproject.toml -p linux-64 --micromamba --kind explicit"
+create = "conda create --name porec2_dev --file conda-linux-64.lock"
+update = "conda install --name porec2_dev --file conda-linux-64.lock"
+
 
 
 [envs.jupyter]

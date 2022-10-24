@@ -38,6 +38,7 @@ minimap2 = ">=2.24"
 pairtools = ">=1.0.1"
 cooler = ">0.8.0"
 samtools = "*"
+whatshap = ">=1.6"
 
 
 [tool.commitizen]

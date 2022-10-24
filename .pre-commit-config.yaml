@@ -46,3 +46,7 @@ repos:
     rev: v2.29.5
     hooks:
       - id: commitizen
+  - repo: https://github.com/snakemake/snakefmt
+    rev: 0.6.1
+    hooks:
+      - id: snakefmt
