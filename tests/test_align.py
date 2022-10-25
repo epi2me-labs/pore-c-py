@@ -46,7 +46,7 @@ def test_mappy_snvs(
 ):
     aligner = mp.Aligner(str(default_scenario.reference_fasta), preset="map-ont")
     # chrom, start, end, cigar, NM = "chr1", 10, 100, "90M", 1
-    read, _ = simulate_read_sequence(
+    read, _, _ = simulate_read_sequence(
         ff=default_scenario.ff,
         chrom=chrom,
         start=start,

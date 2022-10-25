@@ -1,6 +1,7 @@
 config["enzyme"] = "NlaIII"
 
 CONDA_ENV_NAME = "porec2_dev"
+SEED = "42122"
 
 
 rule all:
@@ -13,9 +14,10 @@ rule all:
 
 rule full:
     input:
-        pairs="output/scenario.processed.pairs.gz",
+        genome="input/scenario.genome.fasta",
+        #pairs="output/scenario.processed.pairs.gz",
         ht_bam="output/scenario.processed.ns.hp.bam",
-        cooler="output/scenario.processed.mcool",
+        #cooler="output/scenario.processed.mcool",
 
 
 rule generate_test_data:
@@ -26,7 +28,8 @@ rule generate_test_data:
     params:
         enzyme=config["enzyme"],
     shell:
-        "pore-c2 utils create-test-data input/scenario --enzyme {params.enzyme} --seed 421"
+        "pore-c2 utils create-test-data input/scenario --enzyme {params.enzyme} "
+        f"--seed {SEED}"
         " --num-haplotypes 2 --variant-density 0.01 --num-concatemers 200 "
 
 
@@ -69,7 +72,7 @@ rule map_monomers:
         CONDA_ENV_NAME
     shell:
         "(samtools fastq -T '*' {input.ubam} | "
-        "minimap2 -ayx  map-ont {input.mmi} - | "
+        "minimap2 -ayx  asm5 {input.mmi} - | "
         "samtools sort -t MI -n -o {output.bam} -) &> {log}"
 
 
@@ -167,3 +170,4 @@ rule whatshap_haplotag:
         "-o {output.ht_bam} --output-haplotag-list {output.ht_reads} "
         "--ignore-read-groups "
         "{input.vcf} {input.bam} 2>{log}"
+        " && samtools index {output.ht_bam} "

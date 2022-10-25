@@ -35,6 +35,8 @@ dependencies = [
   "memory-profiler>=0.60.0",
   "black>=22.6.0",
   "isort>=5.10.1",
+  "ipython",
+  "python-lsp-server[all]"
 ]
 
 [envs.jupyter.scripts]

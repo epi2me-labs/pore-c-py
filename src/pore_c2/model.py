@@ -470,6 +470,10 @@ class MonomerReadSeq:
         self._update_tags()
         return self.read_seq.to_fastq()
 
+    def to_fastq_str(self) -> str:
+        self._update_tags()
+        return self.read_seq.to_fastq_str()
+
     def to_align(
         self, header=DEFAULT_ALIGN_HEADER, as_unaligned: bool = False
     ) -> AlignedSegment:
@@ -514,6 +518,11 @@ class ConcatemerReadSeq:
             rec, as_unaligned=as_unaligned, init_mod_bases=init_mod_bases
         )
         return cls.from_readseq(read_seq)
+
+    def to_fastq_str(self, walk: Optional["Walk"]):
+        if walk:
+            self.read_seq.tags["Xc"] = walk.to_tag()
+        return self.read_seq.to_fastq_str()
 
     def cut(self, cutter: Cutter) -> List[MonomerReadSeq]:
         positions = cutter.get_cut_sites(self.read_seq.sequence)
@@ -650,6 +659,9 @@ class Walk:
     @classmethod
     def from_aligns(cls, aligns: List[MonomerReadSeq]):
         return cls([WalkSegment.from_monomer(_) for _ in aligns])
+
+    def __len__(self):
+        return len(self.segments)
 
     @classmethod
     def from_tag(cls, tag: str):

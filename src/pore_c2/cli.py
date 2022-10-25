@@ -151,7 +151,8 @@ def create_test_data(
     if seed is None:
         rng = default_rng()
     else:
-        rng = default_rng(seed)
+        rng = default_rng(seed=int(seed))
+        logger.debug(f"Initialised random seet to {seed}")
     logger.debug(f"Dividing genome {genome_size} into {num_chroms} chromosomes")
     chrom_lengths = {
         f"chr{x+1}": v
@@ -161,6 +162,7 @@ def create_test_data(
     }
     logger.debug("Creating scenario")
     scenario = Scenario(
+        rng,
         chrom_lengths,
         cut_rate=cut_rate,
         enzyme=enzyme,
@@ -168,13 +170,13 @@ def create_test_data(
         num_haplotypes=num_haplotypes,
         variant_density=variant_density,
         temp_path=base_dir,
-        random_state=rng,
     )
     logger.info(f"Creating scenario: {scenario}")
     logger.info(f"Genome fasta: {scenario.reference_fasta}")
     logger.info(f"Concatemer fastq: {scenario.concatemer_fastq}")
     if num_haplotypes >= 2 and variant_density > 0:
         logger.info(f"Phased VCF: {scenario.phased_vcf}")
+    logger.info(f"Monomer metadata: {scenario.monomer_parquet}")
     return scenario
 
 

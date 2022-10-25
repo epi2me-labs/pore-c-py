@@ -2,6 +2,7 @@ import shutil
 from collections import Counter
 from pathlib import Path
 
+import polars as pl
 import pysam
 import pytest
 from typer.testing import CliRunner
@@ -46,10 +47,8 @@ def test_digest_concatemers(default_scenario: Scenario, tmp_path, suffix):
         default_scenario.enzyme,
         output_file,
     )
-    expected = dict(
-        default_scenario.concatemer_metadata.select(
-            ["concatemer_id", "num_segments"]
-        ).rows()
+    expected = default_scenario.concatemer_metadata.select(
+        ["concatemer_id", "num_monomers"]
     )
     observed = Counter()
     if suffix == ".fastq":
@@ -63,7 +62,13 @@ def test_digest_concatemers(default_scenario: Scenario, tmp_path, suffix):
         for rec in af:
             concatemer_id = rec.get_tag("MI")
             observed[concatemer_id] += 1
+    observed = pl.DataFrame(
+        list(observed.items()), columns=["concatemer_id", "observed_mononmers"]
+    )
     assert len(observed) == len(expected)
+    oe_df = expected.join(observed, on="concatemer_id", how="outer")
+    diff = oe_df.filter(pl.col("num_monomers") != pl.col("observed_mononmers"))
+    assert len(diff) == 0
 
 
 def test_create_test_data(tmp_path):

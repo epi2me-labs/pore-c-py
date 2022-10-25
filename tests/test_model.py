@@ -10,9 +10,26 @@ from pore_c2.model import (
     ReadSeq,
     Walk,
     WalkSegment,
+    splits_to_intervals,
 )
 from pore_c2.settings import DEFAULT_ALIGN_HEADER, WALK_TAG
 from pore_c2.utils import SamFlags
+
+
+@pytest.mark.parametrize(
+    "length,positions,expected",
+    [
+        (10, [5], [(0, 5), (5, 10)]),
+        (10, [0, 5], [(0, 5), (5, 10)]),
+        (10, [0, 5, 10], [(0, 5), (5, 10)]),
+        (10, [], [(0, 10)]),
+        (10, [0], [(0, 10)]),
+        (10, [0, 10], [(0, 10)]),
+    ],
+)
+def test_splits_to_intervals(length, positions, expected):
+    intervals = splits_to_intervals(positions, length)
+    assert intervals == expected
 
 
 @pytest.mark.parametrize(
@@ -116,6 +133,28 @@ def concatemer_aligned() -> AlignedSegment:
     return src
 
 
+@pytest.fixture
+def concatemer_aligned_strand() -> AlignedSegment:
+    src = AlignedSegment.from_dict(
+        dict(
+            name="read_w_mods",
+            seq="AACGTTCGAAC",
+            qual="!!00{}22[]]",
+            tags=["RG:Z:RG01", "Mm:Z:C+m,0,1;", "Ml:B:C,122,128"],
+            ref_name="chr1",
+            ref_pos="100",
+            map_quality="30",
+            flag="16",
+            next_ref_pos="0",
+            next_ref_name="*",
+            cigar="11M",
+            length="0",
+        ),
+        header=AlignmentHeader.from_dict({"SQ": [{"SN": "chr1", "LN": 1000}]}),
+    )
+    return src
+
+
 def test_unaligned_round_trip(concatemer_unaligned: AlignedSegment):
     rs = ReadSeq.from_align(concatemer_unaligned)
     assert rs.name == concatemer_unaligned.query_name
@@ -134,6 +173,17 @@ def test_aligned_round_trip(concatemer_aligned: AlignedSegment):
         header=AlignmentHeader.from_dict({"SQ": [{"SN": "chr1", "LN": 1000}]})
     )
     assert dest.tostring() == concatemer_aligned.tostring()
+
+
+def test_aligned_strand_round_trip(concatemer_aligned_strand: AlignedSegment):
+    rs = ReadSeq.from_align(concatemer_aligned_strand)
+    assert rs.name == concatemer_aligned_strand.query_name
+    assert rs.sequence == concatemer_aligned_strand.query_sequence
+    assert rs.quality == concatemer_aligned_strand.qual
+    dest = rs.to_align(
+        header=AlignmentHeader.from_dict({"SQ": [{"SN": "chr1", "LN": 1000}]})
+    )
+    assert dest.tostring() == concatemer_aligned_strand.tostring()
 
 
 def test_group_monomer_aligns(monomer_read_seqs):
