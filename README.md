@@ -3,7 +3,7 @@
 Prepare your environment
 
 ```shell
-pipx install pdm   # to manage dependencies & environments
+pipx install phatch       # to manage dependencies & environments
 pipx install pre-commit   # clean code
 pipx install commitizen   # clean commit messages
 pipx install tox          # test against multiple versions of python
@@ -13,7 +13,8 @@ Initial setup
 
 ```shell
 pre-commit install
-pdm install         # create a virtualenv for testing
+pre-commit install --hook-type commit-msg --hook-type pre-push
+hatch run pore-c2 --help        # create a virtualenv for testing
 ```
 
 Developer Workflow
@@ -24,9 +25,7 @@ Developer Workflow
 git checkout -b <branch-name>
 # 2. Edit some files
 # 3. Run some tests
-pdm run test    # run pytest tests
-pdm run testw   # run tests in watcher mode
-tox             # test against multiple versions of python
+hatch run test    # run pytest tests
 # 4. Get ready to commit your work
 git add <edited files>  # stage your files
 git commit      # this will run the precommit hooks

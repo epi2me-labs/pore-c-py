@@ -34,7 +34,7 @@ repos:
     hooks:
       - id: isort
   - repo: https://github.com/psf/black
-    rev: 22.6.0
+    rev: 22.10.0
     hooks:
       - id: black
         language_version: python3
@@ -43,10 +43,10 @@ repos:
     hooks:
       - id: flake8
   - repo: https://github.com/commitizen-tools/commitizen
-    rev: v2.29.5
+    rev: v2.35.0
     hooks:
       - id: commitizen
   - repo: https://github.com/snakemake/snakefmt
-    rev: 0.6.1
+    rev: v0.6.1
     hooks:
       - id: snakefmt

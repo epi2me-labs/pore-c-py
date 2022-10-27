@@ -5,7 +5,6 @@ from typing import Optional
 
 import mappy
 import typer
-from numpy.random import default_rng
 from pysam import FastaFile, faidx  # pyright: ignore [reportGeneralTypeIssues]
 
 from pore_c2 import __version__
@@ -142,34 +141,26 @@ def create_test_data(
     enzyme: str = "NlaIII",
     num_concatemers: int = 100,
     num_haplotypes: int = 0,
-    variant_density: float = 0.0,
-    seed: Optional[int] = None,
+    variant_density: float = 0.05,
+    p_cis: float = 0.8,
+    mean_frags_per_concatemer: int = 5,
+    max_frags_per_concatemer: int = 10,
+    seed: int = 42,
 ):
     logger = get_logger()
     logger.info(f"Creating test data at: {base_dir}")
-
-    if seed is None:
-        rng = default_rng()
-    else:
-        rng = default_rng(seed=int(seed))
-        logger.debug(f"Initialised random seet to {seed}")
-    logger.debug(f"Dividing genome {genome_size} into {num_chroms} chromosomes")
-    chrom_lengths = {
-        f"chr{x+1}": v
-        for x, v in enumerate(
-            sorted(rng.choice(genome_size, size=num_chroms, replace=False))
-        )
-    }
-    logger.debug("Creating scenario")
     scenario = Scenario(
-        rng,
-        chrom_lengths,
+        seed=seed,
+        genome_size=genome_size,
+        num_chroms=num_chroms,
         cut_rate=cut_rate,
         enzyme=enzyme,
         num_concatemers=num_concatemers,
         num_haplotypes=num_haplotypes,
         variant_density=variant_density,
         temp_path=base_dir,
+        p_cis=p_cis,
+        mean_frags_per_concatemer=mean_frags_per_concatemer,
     )
     logger.info(f"Creating scenario: {scenario}")
     logger.info(f"Genome fasta: {scenario.reference_fasta}")

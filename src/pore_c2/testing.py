@@ -1,11 +1,13 @@
+import json
 import subprocess as sp
-from dataclasses import dataclass, field
+from collections import defaultdict
+from dataclasses import asdict, dataclass, field
 from functools import cached_property
-from itertools import chain, count
+from itertools import count
 from pathlib import Path
 from shutil import which
 from tempfile import mkdtemp
-from typing import Any, Dict, Iterable, List, Literal, Optional, Tuple
+from typing import Any, Dict, Iterable, List, Literal, Mapping, Optional, Tuple
 
 import numpy as np
 import numpy.typing as npt
@@ -46,7 +48,7 @@ def simulate_walk(
     fragments_df: pl.DataFrame,
     max_attempt_factor: float = 2.0,
     stranded: bool = False,
-) -> Walk:
+) -> Tuple[Walk, List[int]]:
     if stranded:
         strands = random_state.choice([True, False], size=num_monomers)
     else:
@@ -75,7 +77,7 @@ def simulate_walk(
             )
         )
         concatemer_start = concatemer_end
-    return walk
+    return walk, walk_fragments
 
 
 def build_monomer(
@@ -84,6 +86,8 @@ def build_monomer(
     subread_idx: int,
     subread_total: int,
     concatemer_id: str,
+    snps: Optional[List["SNPHaplotypes"]] = None,
+    haplotype: int = 0,
 ) -> MonomerReadSeq:
 
     coords = ConcatemerCoords(
@@ -94,12 +98,27 @@ def build_monomer(
     )
     length = segment.read_end - segment.read_start
     monomer_id = MonomerReadSeq.generate_id(concatemer_id, coords)
+    if snps:
+        offsets = []
+        allele_values = []
+        for s in snps:
+            allele_idx = s.haplotypes[haplotype]
+            if allele_idx == 0:
+                allele_values.append(s.ref)
+            else:
+                allele_values.append(s.alt)
+            offsets.append(s.offset)
+    else:
+        allele_values, offsets = None, None
+
     _seq, _offsets, _alleles = simulate_read_sequence(
         ff=ff,
         chrom=segment.chrom,
         start=segment.genome_start,
         end=segment.genome_end,
         strand=True if segment.orientation == "+" else False,
+        offsets=offsets,
+        allele_values=allele_values,
     )
     read_seq = ReadSeq(
         name=monomer_id,
@@ -153,10 +172,10 @@ def random_concatemer_generator(
     mean_frags_per_concatemer: int = 5,
     min_frags_per_concatemer: int = 1,
     max_frags_per_concatemer: int = 50,
-    haplotype_df: Optional[pl.DataFrame] = None,
+    fragment_to_snps: Mapping[int, List["SNPHaplotypes"]],
     num_haplotypes: int = 0,
     max_concatemers: int = 0,
-) -> Iterable[Tuple[ConcatemerReadSeq, List[MonomerReadSeq], Walk]]:
+) -> Iterable[Tuple[ConcatemerReadSeq, List[MonomerReadSeq], Walk, int]]:
 
     concatemer_idx = 0
     while True:
@@ -164,15 +183,29 @@ def random_concatemer_generator(
         num_monomers = random_state.poisson(mean_frags_per_concatemer, size=1).clip(
             min_frags_per_concatemer, max_frags_per_concatemer
         )[0]
-        walk = simulate_walk(
+        if num_haplotypes > 0:
+            haplotype = (
+                0  # TODO: reinstate random_state.choice(num_haplotypes, size=1)[0]
+            )
+        else:
+            haplotype = 0
+        walk, fragments = simulate_walk(
             num_monomers=num_monomers,
             contact_probs=contact_probs,
             random_state=random_state,
             fragments_df=fragments_df,
         )
+        # actual walk may be shorter than requested
+        num_monomers = len(walk.segments)
         monomers = [
             build_monomer(
-                segment, reference_fasta, monomer_idx, num_monomers, concatemer_id
+                segment,
+                reference_fasta,
+                monomer_idx,
+                num_monomers,
+                concatemer_id,
+                fragment_to_snps.get(fragments[monomer_idx], None),
+                haplotype,
             )
             for monomer_idx, segment in enumerate(walk.segments)
         ]
@@ -185,7 +218,7 @@ def random_concatemer_generator(
                 quality="".join([m.read_seq.quality for m in monomers]),
             ),
         )
-        yield (concatemer, monomers, walk)
+        yield (concatemer, monomers, walk, haplotype)
         concatemer_idx += 1
         if max_concatemers and concatemer_idx > max_concatemers:
             break
@@ -552,7 +585,7 @@ def simulate_concatemer_fastqs(
     num_concatemers: int = 100,
     mean_frags_per_concatemer: int = 5,
     max_frags_per_concatemer: int = 50,
-    haplotype_df: Optional[pl.DataFrame] = None,
+    snp_haplotypes: Optional[List[SNPHaplotypes]] = None,
     num_haplotypes: int = 0,
     random_state: Optional[Generator] = None,
     contact_probs: Optional[npt.NDArray[np.float_]] = None,
@@ -562,6 +595,7 @@ def simulate_concatemer_fastqs(
     List[ConcatemerReadSeq],
     List[List[MonomerReadSeq]],
     List[Walk],
+    List[int],
 ]:
 
     ff = FastaFile(str(reference_fasta))
@@ -572,13 +606,19 @@ def simulate_concatemer_fastqs(
     if contact_probs is None:
         # pairwise probabilities of contacts between fragments
         contact_probs = simulate_contact_prob_matrix(fragments_df, p_cis=p_cis)
+
+    fragment_to_snps = defaultdict(list)
+    if snp_haplotypes:
+        for snp in snp_haplotypes:
+            if snp.fragment_id is not None:
+                fragment_to_snps[snp.fragment_id].append(snp)
     concat_gen = random_concatemer_generator(
         fragments_df=fragments_df,
         reference_fasta=ff,
         contact_probs=contact_probs,
-        haplotype_df=haplotype_df,
         random_state=random_state,
         max_concatemers=num_concatemers,
+        fragment_to_snps=fragment_to_snps,
     )
     outfh = fastq.open("w")
     if monomer_fastq:
@@ -589,11 +629,13 @@ def simulate_concatemer_fastqs(
     monomers = []
     concatemers = []
     walks = []
-    for (concatemer, _monomers, walk) in concat_gen:
+    haplotypes = []
+    for (concatemer, _monomers, walk, haplotype) in concat_gen:
         outfh.write(concatemer.to_fastq_str(walk))
         concatemers.append(concatemer)
         monomers.append(_monomers)
         walks.append(walk)
+        haplotypes.append(haplotype)
         if monomer_fh:
             for monomer in _monomers:
                 monomer_fh.write(monomer.to_fastq_str())
@@ -601,20 +643,30 @@ def simulate_concatemer_fastqs(
     outfh.close()
     if monomer_fh:
         monomer_fh.close()
-    return fastq, monomer_fastq, concatemers, monomers, walks
+    return fastq, monomer_fastq, concatemers, monomers, walks, haplotypes
 
 
-def monomers_to_dataframe(monomers: List[List[MonomerReadSeq]]) -> pl.DataFrame:
+def monomers_to_dataframe(
+    monomers: List[List[MonomerReadSeq]], haplotypes: List[int]
+) -> pl.DataFrame:
+    data = []
+
+    for x, _m in enumerate(monomers):
+        for m in _m:
+            data.append(
+                {
+                    "monomer_id": m.monomer_id,
+                    "concatemer_id": m.concatemer_id,
+                    "align.chrom": m.read_seq.align_info.ref_name,
+                    "align.start": m.read_seq.align_info.ref_pos,
+                    "align.end": m.read_seq.align_info.ref_end,
+                    "align.strand": m.read_seq.align_info.strand,
+                    "haplotype": haplotypes[x],
+                }
+            )
+
     return pl.DataFrame(
-        [
-            {
-                "monomer_id": m.monomer_id,
-                "concatemer_id": m.concatemer_id,
-                "align.chrom": m.read_seq.align_info.ref_name,
-                "align.start": m.read_seq.align_info.ref_pos,
-            }
-            for m in chain.from_iterable(monomers)
-        ],
+        data,
         orient="row",
     )
 
@@ -640,17 +692,19 @@ class TestScenarioFileCollection(FileCollection):
     monomer_parquet: Path = Path("{prefix}.monomer.pq")
     phased_vcf: Path = Path("{prefix}.phased_variants.vcf.gz")
     contact_prob: Path = Path("{prefix}.contact_probs.npy")
+    params_json: Path = Path("{prefix}.params.json")
 
 
 @dataclass
 class Scenario:
-    random_state: np.random.Generator
-    chrom_lengths: Dict[str, int]
+    seed: int = 421
+    genome_size: int = 5_000
+    num_chroms: int = 2
     cut_rate: float = 0.005
-    enzyme: str = "EcoRI"
+    enzyme: str = "NlaIII"
     num_concatemers: int = 100
     num_haplotypes: int = 0
-    variant_density: float = 0.0
+    variant_density: float = 0.05
     p_cis: float = 0.8
     mean_frags_per_concatemer: int = 5
     max_frags_per_concatemer: int = 10
@@ -660,7 +714,31 @@ class Scenario:
 
     def __post_init__(self):
         self.fc = TestScenarioFileCollection.with_prefix(self.temp_path)
-        self._concatemer_metadata = None
+        self.to_json()
+        self.random_state = default_rng(self.seed)
+        self.chrom_lengths = {
+            f"chr{x+1}": v
+            for x, v in enumerate(
+                sorted(
+                    self.random_state.choice(
+                        self.genome_size, size=self.num_chroms, replace=False
+                    )
+                )
+            )
+        }
+
+    @classmethod
+    def from_json(cls, p: Path, temp_path: Optional[Path] = None):
+        d = json.loads(p.read_text())
+        if temp_path:
+            d["temp_path"] = temp_path
+        return cls(**d)
+
+    def to_json(self, p: Optional[Path] = None):
+        p = self.fc.params_json if p is None else p
+        with p.open("w") as fh:
+            d = {k: v for k, v in asdict(self).items() if k not in ("temp_path", "fc")}
+            fh.write(json.dumps(d))
 
     @cached_property
     def cut_sites(self) -> Dict[str, List[int]]:
@@ -703,6 +781,15 @@ class Scenario:
             )
         else:
             return None
+
+    @cached_property
+    def fragment_to_snps(self):
+        res = defaultdict(list)
+        if self.snp_haplotypes:
+            for snp in self.snp_haplotypes:
+                if snp.fragment_id is not None:
+                    res[snp.fragment_id].append(snp)
+        return res
 
     @cached_property
     def haplotype_df(self) -> Optional[pl.DataFrame]:
@@ -751,7 +838,7 @@ class Scenario:
             self.reference_fasta,
             self.fragments_df,
             monomer_fastq=self.fc.monomer_fastq,
-            haplotype_df=self.haplotype_df,
+            snp_haplotypes=self.snp_haplotypes,
             num_haplotypes=self.num_haplotypes,
             random_state=self.random_state,
             num_concatemers=self.num_concatemers,
@@ -786,8 +873,12 @@ class Scenario:
         return self._concatemers_res[4]
 
     @cached_property
+    def haplotypes(self) -> List[int]:
+        return self._concatemers_res[5]
+
+    @cached_property
     def monomer_metadata(self) -> pl.DataFrame:
-        return monomers_to_dataframe(self.monomers)
+        return monomers_to_dataframe(self.monomers, self.haplotypes)
 
     @cached_property
     def monomer_parquet(self) -> Path:

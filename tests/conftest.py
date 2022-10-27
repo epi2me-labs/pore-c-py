@@ -3,7 +3,6 @@ from pathlib import Path
 from typing import Dict
 
 import pytest
-from numpy.random import default_rng
 from typer.testing import CliRunner
 
 from pore_c2.model import AlignInfo, ConcatemerCoords, MonomerReadSeq, ReadSeq
@@ -28,11 +27,8 @@ def scenario(request, scenario_dir):
     data_dir = scenario_dir / f"enzyme_{enzyme}"
     data_dir = data_dir.mkdir()
     s = Scenario(
-        random_state=default_rng(seed=421),
-        chrom_lengths={"chr1": 2000, "chr2": 1000},
         enzyme=enzyme,
     )
-
     return s
 
 
@@ -41,13 +37,10 @@ def default_scenario(scenario_dir):
     data_dir = scenario_dir / "default"
     data_dir.mkdir()
     s = Scenario(
-        random_state=default_rng(seed=421),
-        chrom_lengths={"chr1": 2000, "chr2": 1000},
         temp_path=Path(str(data_dir)),
     )
     s.reference_fasta
     s.concatemer_fastq
-
     return s
 
 
@@ -56,8 +49,6 @@ def het_scenario(scenario_dir):
     data_dir = scenario_dir / "het"
     data_dir.mkdir()
     s = Scenario(
-        random_state=default_rng(seed=421),
-        chrom_lengths={"chr1": 2000, "chr2": 1000},
         temp_path=Path(str(data_dir)),
         num_haplotypes=2,
         variant_density=0.01,
@@ -73,8 +64,6 @@ def large_scenario(scenario_dir):
     data_dir = scenario_dir / "large"
     data_dir.mkdir()
     s = Scenario(
-        random_state=default_rng(seed=421),
-        chrom_lengths={"chr1": 20_000, "chr2": 1000},
         temp_path=Path(str(data_dir)),
         num_concatemers=10_000,
     )

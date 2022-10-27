@@ -565,6 +565,8 @@ class ConcatemerReadSeq:
                     coords=coords,
                 )
             )
+        if len(res) != num_intervals:
+            raise ValueError(intervals)
         return res
 
 

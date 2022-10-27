@@ -51,7 +51,7 @@ version_files = ["pyproject.toml:version"]
 [tool.pytest.ini_options]
 addopts = "-p no:pytest-workflow"
 testpaths = ['tests']
-norecursedirs = ["dist", "build", ".tox", "scratch*", ".cache", ".venv", "tests/worflow"]
+norecursedirs = ["dist", "build", ".tox", "scratch*", ".cache", ".venv", "tests/workflow"]
 doctest_optionflags = ["NORMALIZE_WHITESPACE", "IGNORE_EXCEPTION_DETAIL"]
 looponfailroots = ["tests", "src"]
 

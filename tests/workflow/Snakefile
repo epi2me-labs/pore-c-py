@@ -15,7 +15,7 @@ rule all:
 rule full:
     input:
         genome="input/scenario.genome.fasta",
-        #pairs="output/scenario.processed.pairs.gz",
+        pairs="output/scenario.processed.pairs.gz",
         ht_bam="output/scenario.processed.ns.hp.bam",
         #cooler="output/scenario.processed.mcool",
 
@@ -30,7 +30,13 @@ rule generate_test_data:
     shell:
         "pore-c2 utils create-test-data input/scenario --enzyme {params.enzyme} "
         f"--seed {SEED}"
-        " --num-haplotypes 2 --variant-density 0.01 --num-concatemers 200 "
+        " --num-haplotypes 2 "
+        "--genome-size 10_000 "
+        "--cut-rate 0.001 "
+        "--variant-density 0.05 "
+        "--num-concatemers 1000 "
+        "--mean-frags-per-concatemer 10 "
+        "--p-cis 0.80 "
 
 
 rule index_genome:
@@ -160,7 +166,7 @@ rule whatshap_haplotag:
         vcf="input/scenario.phased_variants.vcf.gz",
     output:
         ht_bam="output/scenario.processed.ns.hp.bam",
-        ht_reads="output/scenario.processed.ns.hp.txt,gz",
+        ht_reads="output/scenario.processed.ns.hp.txt.gz",
     log:
         "output/scenario.processed.haplotagged.log",
     conda:

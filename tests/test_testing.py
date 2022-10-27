@@ -35,7 +35,7 @@ def test_assign_snps_to_fragments(pos, buffer, snps, offset, fragments):
     assert _fragments == fragments
 
 
-def test_simualte_sequence_with_cut_sites():
+def test_simulate_sequence_with_cut_sites():
     cutter = EnzymeCutter.from_name("EcoRI")
     enzyme = cutter.enzyme
     site = enzyme.site
@@ -57,13 +57,18 @@ def test_simulate_concatemer(default_scenario: Scenario):
         fragments_df=default_scenario.fragments_df,
         reference_fasta=default_scenario.ff,
         contact_probs=default_scenario.contact_prob_matrix,
-        haplotype_df=default_scenario.haplotype_df,
+        fragment_to_snps=default_scenario.fragment_to_snps,
         random_state=rng,
         max_concatemers=20,
     )
     cutter = EnzymeCutter.from_name(default_scenario.enzyme)
-    for (concatemer, expected, _) in concat_gen:
+    for (concatemer, expected, walk, _) in concat_gen:
+        walk_length = len(walk.segments)
         observed = concatemer.cut(cutter)
+        assert observed[0].coords.subread_total == walk_length
+        assert expected[0].coords.subread_total == walk_length
+        assert len(observed) == walk_length
+        assert len(expected) == len(observed)
         assert [_.coords for _ in observed] == [_.coords for _ in expected]
 
 
@@ -158,31 +163,12 @@ def test_random_walk():
 
 
 def test_scenario(tmp_path):
-    seed = 42
-    genome_size: int = 5_000
-    num_chroms: int = 2
-    cut_rate: float = 0.005
-    enzyme: str = "NlaIII"
-    num_concatemers: int = 100
-    num_haplotypes: int = 0
-    variant_density: float = 0.0
-    rng = default_rng(seed=int(seed))
-    chrom_lengths = {
-        f"chr{x+1}": v
-        for x, v in enumerate(
-            sorted(rng.choice(genome_size, size=num_chroms, replace=False))
-        )
-    }
-    scenario = Scenario(
-        rng,
-        chrom_lengths,
-        cut_rate=cut_rate,
-        enzyme=enzyme,
-        num_concatemers=num_concatemers,
-        num_haplotypes=num_haplotypes,
-        variant_density=variant_density,
-        temp_path=tmp_path,
+
+    s1 = Scenario(
+        genome_size=2_000,
+        num_concatemers=10,
+        temp_path=tmp_path / "s1",
     )
+    s2 = Scenario.from_json(s1.fc.params_json, temp_path=tmp_path / "s2")
     # TODO figure out actual test
-    print(scenario.monomer_metadata)
-    print(scenario.concatemer_metadata)
+    assert len(s1.monomer_metadata) == len(s2.monomer_metadata)
