@@ -12,7 +12,12 @@ from pore_c2.model import (
     WalkSegment,
     splits_to_intervals,
 )
-from pore_c2.settings import DEFAULT_ALIGN_HEADER, WALK_TAG
+from pore_c2.settings import (
+    CONCATEMER_TAG,
+    DEFAULT_ALIGN_HEADER,
+    MOLECULE_TAG,
+    WALK_TAG,
+)
 from pore_c2.utils import SamFlags
 
 
@@ -52,7 +57,7 @@ def test_flow(concatemer_unaligned: AlignedSegment):
     concatemer = ConcatemerReadSeq.from_align(concatemer_unaligned, as_unaligned=True)
     monomers = concatemer.split([5])
     assert len(monomers) == 2
-    assert [_.read_seq.tags["MI"].rsplit(":", 1)[1] for _ in monomers] == [
+    assert [_.read_seq.tags[MOLECULE_TAG].rsplit(":", 1)[1] for _ in monomers] == [
         "read_w_mods",
         "read_w_mods",
     ]
@@ -75,7 +80,7 @@ def test_fastq_round_trip():
         name="read01",
         sequence="ACTG",
         quality="????",
-        comment="AB:Z:sdfsdfsd\tMI:Z:read1",
+        comment=f"AB:Z:sdfsdfsd\t{MOLECULE_TAG}:Z:read1",
     )
     rs = ReadSeq.from_fastq(src)
     assert rs.name == src.name
@@ -210,9 +215,9 @@ def test_annotate_monomer_aligns(monomer_read_seqs):
         for a in aligns:
             a._update_tags()
             tags = a.read_seq.tags
-            assert "MI" in tags
+            assert MOLECULE_TAG in tags
             assert WALK_TAG in tags
-            assert "Xc" in tags
+            assert CONCATEMER_TAG in tags
 
 
 def test_mods(mock_reads):
@@ -257,7 +262,7 @@ def test_walk():
         WalkSegment(30, 40),
     ]
     w = Walk(segments)
-    tag = "Xc:Z:*:0-5;chr1:+:10-15:5-10;chr2:-:30-50:10-30;*:30-40"
+    tag = f"{CONCATEMER_TAG}:Z:*:0-5;chr1:+:10-15:5-10;chr2:-:30-50:10-30;*:30-40"
     assert w.to_tag() == tag
     w1 = Walk.from_tag(tag)
     assert w1 == w

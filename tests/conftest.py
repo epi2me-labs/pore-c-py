@@ -6,6 +6,7 @@ import pytest
 from typer.testing import CliRunner
 
 from pore_c2.model import AlignInfo, ConcatemerCoords, MonomerReadSeq, ReadSeq
+from pore_c2.settings import MOLECULE_TAG
 from pore_c2.testing import Scenario
 
 
@@ -78,7 +79,7 @@ def name_sorted_bam(default_scenario: Scenario):
     _ = sp.check_output(
         f"minimap2 -y -ax map-ont "
         f"{default_scenario.reference_fasta} {default_scenario.monomer_fastq} "
-        f"| samtools sort -t MI -o {ns_bam}",
+        f"| samtools sort -t {MOLECULE_TAG} -o {ns_bam}",
         stderr=sp.STDOUT,
         shell=True,
     )
@@ -175,7 +176,7 @@ def monomer_read_seqs():
                         map_quality=20,
                         length=10,
                     ),
-                    tags={"MI": f"MI:Z:{concatemer_id}"},
+                    tags={MOLECULE_TAG: f"{MOLECULE_TAG}:Z:{concatemer_id}"},
                 ),
             )
             res.append(m)

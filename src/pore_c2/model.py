@@ -8,7 +8,13 @@ from attrs import Factory, define
 from Bio.Seq import Seq
 from pysam import AlignedSegment, FastxRecord
 
-from .settings import DEFAULT_ALIGN_HEADER, FASTQ_TAG_RE, MOD_TAGS
+from .settings import (
+    CONCATEMER_TAG,
+    DEFAULT_ALIGN_HEADER,
+    FASTQ_TAG_RE,
+    MOD_TAGS,
+    MOLECULE_TAG,
+)
 from .utils import SamFlags
 
 # copied from pysam.libcalignedsegment.pyx
@@ -20,15 +26,6 @@ MM_TAG_SKIP_SCHEME_RE = re.compile(r"[.?]")
 
 ARRAY_TO_HTSLIB_TRANS = str.maketrans(PARRAY_TYPES, HTSLIB_TYPES)
 PYSAM_TO_SAM_TRANS = str.maketrans(HTSLIB_TYPES, SAM_TYPES)
-
-
-TAG_MI_RE = re.compile(r"MI\:Z\:(\S+)")
-# XC==concatemer metadata
-TAG_XC_RE = re.compile(
-    r"Xc:B:i,(?P<start>\d+),(?P<end>\d+),(?P<subread_idx>\d+),(?P<subread_total>\d+)"
-)
-# XW==walk metadata
-TAG_XW_RE = re.compile(r"Xw\:Z\:(.+)")  # TODO fill this out
 
 WALK_SEGMENT_RE = re.compile(
     r"(?P<chrom>(\S+?)):(?P<orientation>[+-]):"
@@ -397,7 +394,10 @@ class ConcatemerCoords:
         )
 
     def to_tag(self) -> str:
-        return f"Xc:B:i,{self.start},{self.end},{self.subread_idx},{self.subread_total}"
+        return (
+            f"{CONCATEMER_TAG}:B:i,{self.start},{self.end},"
+            f"{self.subread_idx},{self.subread_total}"
+        )
 
 
 @define(kw_only=True)
@@ -428,20 +428,23 @@ class MonomerReadSeq:
         return f"{concatemer_id}:{coords.subread_idx:0{num_digits}d}"
 
     def _update_tags(self):
-        self.read_seq.tags["MI"] = f"MI:Z:{self.concatemer_id}"
-        self.read_seq.tags["Xc"] = self.coords.to_tag()
+        self.read_seq.tags[MOLECULE_TAG] = f"{MOLECULE_TAG}:Z:{self.concatemer_id}"
+        self.read_seq.tags[CONCATEMER_TAG] = self.coords.to_tag()
 
     @classmethod
     def from_readseq(cls, rec: ReadSeq):
-        if "MI" not in rec.tags:
-            raise ValueError(f"No MI tag in {rec.name}, can't create monomer")
-        if "Xc" not in rec.tags:
+        if MOLECULE_TAG not in rec.tags:
             raise ValueError(
-                f"No Xc tags in {rec.name}, can't reconstruct monomer coords"
+                f"No {MOLECULE_TAG} tag in {rec.name}, can't create monomer"
             )
-        coords = ConcatemerCoords.from_tag(rec.tags["Xc"])
+        if CONCATEMER_TAG not in rec.tags:
+            raise ValueError(
+                f"No {CONCATEMER_TAG} tags in {rec.name}, "
+                "can't reconstruct monomer coords"
+            )
+        coords = ConcatemerCoords.from_tag(rec.tags[CONCATEMER_TAG])
         monomer_id = rec.name
-        concatemer_id = rec.tags["MI"].rsplit(":", 1)[-1]
+        concatemer_id = rec.tags[MOLECULE_TAG].rsplit(":", 1)[-1]
         return cls(
             monomer_id=monomer_id,
             concatemer_id=concatemer_id,
@@ -521,7 +524,7 @@ class ConcatemerReadSeq:
 
     def to_fastq_str(self, walk: Optional["Walk"]):
         if walk:
-            self.read_seq.tags["Xc"] = walk.to_tag()
+            self.read_seq.tags[CONCATEMER_TAG] = walk.to_tag()
         return self.read_seq.to_fastq_str()
 
     def cut(self, cutter: Cutter) -> List[MonomerReadSeq]:
@@ -548,8 +551,8 @@ class ConcatemerReadSeq:
                 modified_bases=self.read_seq.mod_bases,
             )
             tags = {k: v for k, v in self.read_seq.tags.items() if k not in MOD_TAGS}
-            tags["Xc"] = coords.to_tag()
-            tags["MI"] = f"MI:Z:{self.concatemer_id}"
+            tags[CONCATEMER_TAG] = coords.to_tag()
+            tags[MOLECULE_TAG] = f"{MOLECULE_TAG}:Z:{self.concatemer_id}"
             if mm_str and ml_str:
                 tags["MM"] = mm_str
                 tags["ML"] = ml_str
@@ -673,4 +676,4 @@ class Walk:
         return cls(segments)
 
     def to_tag(self) -> str:
-        return "Xc:Z:" + ";".join([_.to_string() for _ in self.segments])
+        return f"{CONCATEMER_TAG}:Z:" + ";".join([_.to_string() for _ in self.segments])

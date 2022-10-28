@@ -10,7 +10,7 @@ from attrs import define
 
 from .log import get_logger
 from .model import AlignInfo, MonomerReadSeq, Walk
-from .settings import WALK_TAG
+from .settings import MOLECULE_TAG, WALK_TAG
 from .utils import AlignCategory, FileCollection, SamFlags
 
 logger = get_logger()
@@ -36,7 +36,7 @@ def group_aligns_by_concatemers(
         if concat_id in seen:
             raise ValueError(
                 f"Concatemer '{concat_id}' has already been seen, "
-                "these alignments should be sorted by MI tag"
+                f"these alignments should be sorted by {MOLECULE_TAG} tag"
             )
         aligns = list(aligns)
         if sort:

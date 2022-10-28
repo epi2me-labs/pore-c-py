@@ -34,6 +34,7 @@ from pore_c2.model import (
     WalkSegment,
 )
 from pore_c2.monomers import GenomicFragment
+from pore_c2.settings import MOLECULE_TAG
 
 from .log import get_logger
 from .utils import FileCollection
@@ -898,7 +899,8 @@ class Scenario:
             try:
                 sp.check_call(
                     f"minimap2 -ax map-ont {self.reference_fasta} "
-                    f"{self.monomer_fastq} | samtools sort -t MI -o {ns_bam}"
+                    f"{self.monomer_fastq} | samtools sort -t "
+                    f"{MOLECULE_TAG} -o {ns_bam}"
                 )
             except Exception:
                 raise
