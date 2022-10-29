@@ -13,8 +13,8 @@ from pore_c2.cli import (
     digest_concatemers,
     process_monomer_alignments,
 )
+from pore_c2.sam_tags import pysam_verbosity
 from pore_c2.testing import Scenario
-from pore_c2.utils import pysam_verbosity
 
 
 @pytest.mark.parametrize("command", ["index", "align", "merge"])

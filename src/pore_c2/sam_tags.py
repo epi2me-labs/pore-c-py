@@ -1,8 +1,21 @@
 import array
+import enum
 import re
-from typing import Any
+from contextlib import contextmanager
+from functools import lru_cache
+from typing import Any, Literal
 
+import pysam
+from attrs import asdict, define, fields_dict
 from pysam import AlignedSegment
+
+
+@contextmanager
+def pysam_verbosity(level: int = 0):
+    current = pysam.set_verbosity(level)
+    yield
+    pysam.set_verbosity(current)
+
 
 # MM:Z:([ACGTUN][-+]([a-z]+|[0-9]+)[.?]?(,[0-9]+)*;)*
 MOD_RE = re.compile(
@@ -16,6 +29,7 @@ MOD_RE = re.compile(
 MOD_TAGS = {"Ml", "ML", "Mm", "MM"}
 MM_TAG_SKIP_SCHEME_RE = re.compile(r"[.?]")
 
+MOLECULE_TAG="MI"
 WALK_TAG = "Xw"
 CONCATEMER_TAG = "Xc"
 #  <alpha-num><alpha-num>:<type>:<data>
@@ -25,8 +39,6 @@ FASTQ_TAG_RE = re.compile(r"(?P<tag>\w\w):(?P<type>[ABfHiZ]):(?P<data>\S+)")
 SAM_TYPES = "iiiiiif"
 HTSLIB_TYPES = "cCsSiIf"
 PARRAY_TYPES = "bBhHiIf"
-
-
 ARRAY_TO_HTSLIB_TRANS = str.maketrans(PARRAY_TYPES, HTSLIB_TYPES)
 PYSAM_TO_SAM_TRANS = str.maketrans(HTSLIB_TYPES, SAM_TYPES)
 
@@ -86,3 +98,96 @@ def downgrade_mm_tag(align: AlignedSegment) -> AlignedSegment:
     d = align.to_dict()
     d["tags"] = [t for t in d["tags"] if not t.startswith(tag)] + [new_tag]
     return AlignedSegment.from_dict(d, header=align.header)
+
+
+@enum.unique
+class SamEnum(enum.IntFlag):
+    paired = 1  # template having multiple segments in sequencing
+    proper_pair = 2  # each segment properly aligned according to the aligner
+    unmap = 4  # segment unmapped
+    munmap = 8  # next segment in the template unmapped
+    reverse = 16  # SEQ being reverse complemented
+    mreverse = 32  # SEQ of the next segment in the template being reverse complemented
+    read1 = 64  # the first segment in the template
+    read2 = 128  # the last segment in the template
+    secondary = 256  # secondary alignment
+    qcfail = 512  # not passing filters, such as platform/vendor quality controls
+    dup = 1024  # PCR or optical duplicate
+    supplementary = 2048  # supplementary alignment
+
+
+class AlignCategory(enum.IntEnum):
+    primary = 0
+    unmapped = 1
+    supplementary = 2
+    secondary = 3
+
+
+@define(kw_only=True)
+class SamFlags:
+    paired: bool = False
+    proper_pair: bool = False
+    unmap: bool = False
+    munmap: bool = False
+    reverse: bool = False
+    mreverse: bool = False
+    read1: bool = False
+    read2: bool = False
+    secondary: bool = False
+    qcfail: bool = False
+    dup: bool = False
+    supplementary: bool = False
+
+    def to_int(self):
+        res = 0
+        for key, val in asdict(self).items():
+            if val is True:
+                res = res | SamEnum[key].value
+        return res
+
+    def copy(self):
+        settings = asdict(self)
+        return SamFlags(**settings)
+
+    @classmethod
+    def from_int(cls, val: int):
+        kwds = {}
+        for key, _ in fields_dict(cls).items():  # pyright: ignore
+            kwds[key] = (val & SamEnum[key].value) > 0
+        return cls(**kwds)
+
+    @property
+    def primary(self):
+        return not (self.secondary | self.supplementary)
+
+    @property
+    def category(self) -> AlignCategory:
+        if self.secondary:
+            return AlignCategory.secondary
+        elif self.supplementary:
+            return AlignCategory.supplementary
+        elif self.unmap:
+            return AlignCategory.unmapped
+        else:
+            return AlignCategory.primary
+
+    @property
+    def strand(self) -> Literal["+", "-", "."]:
+        if self.unmap:
+            return "."
+        elif self.reverse:
+            return "-"
+        else:
+            return "+"
+
+    @staticmethod
+    @lru_cache
+    def int_to_strand(flag: int) -> Literal["+", "-", "."]:
+        return SamFlags.from_int(flag).strand
+
+    @staticmethod
+    @lru_cache
+    def int_to_category(
+        flag: int,
+    ) -> AlignCategory:
+        return SamFlags.from_int(flag).category

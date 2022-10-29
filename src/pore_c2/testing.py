@@ -30,8 +30,8 @@ from pore_c2.model import (
 from pore_c2.monomers import GenomicFragment
 from pore_c2.settings import MOLECULE_TAG
 
+from .io import FileCollection
 from .log import get_logger
-from .utils import FileCollection
 
 logger = get_logger()
 

@@ -1,9 +1,30 @@
 from pathlib import Path
 
 import pytest
+from attrs import define
 from pysam import fqimport  # type: ignore
 
-from pore_c2.io import find_files, iter_reads
+from pore_c2.io import FileCollection, find_files, iter_reads
+
+
+def test_file_collection(tmp_path):
+    @define
+    class TestFC(FileCollection):
+        a: Path = Path("{prefix}.A.txt")
+        b: Path = Path("{prefix}.B.txt")
+
+    test_fc = TestFC.with_prefix(Path(tmp_path))
+
+    assert test_fc.exists_all() is False
+    assert test_fc.exists_any() is False
+
+    test_fc.a.write_text("a")
+
+    assert test_fc.exists_all() is False
+    assert test_fc.exists_any() is True
+
+    test_fc.b.write_text("b")
+    assert test_fc.exists_all() is True
 
 
 @pytest.mark.parametrize(

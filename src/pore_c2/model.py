@@ -6,9 +6,14 @@ from attrs import Factory, define
 from Bio.Seq import Seq
 from pysam import AlignedSegment, FastxRecord
 
-from .sam_tags import FASTQ_TAG_RE, MOD_TAGS, WALK_SEGMENT_RE, tag_tuple_to_str
+from .sam_tags import (
+    FASTQ_TAG_RE,
+    MOD_TAGS,
+    WALK_SEGMENT_RE,
+    SamFlags,
+    tag_tuple_to_str,
+)
 from .settings import DEFAULT_ALIGN_HEADER
-from .utils import SamFlags
 
 class Cutter(metaclass=ABCMeta):
     @abstractmethod

@@ -5,7 +5,7 @@ import polars as pl
 import pytest
 from attrs import define
 
-from pore_c2.utils import FileCollection
+from pore_c2.io import FileCollection
 
 
 @define

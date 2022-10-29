@@ -1,17 +1,26 @@
 from collections import Counter
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Iterable, List, Literal, Mapping, Optional, Tuple, TypeVar, Union
+from typing import (
+    Dict,
+    Iterable,
+    List,
+    Literal,
+    Mapping,
+    Optional,
+    Tuple,
+    TypeVar,
+    Union,
+)
 
-from attrs import define
+from attrs import define, fields
 from pysam import AlignmentFile, AlignmentHeader, FastaFile, FastxFile
 
 from .aligns import get_pairs
 from .log import get_logger
 from .model import ConcatemerReadSeq, MonomerReadSeq, ReadSeq
-from .sam_tags import downgrade_mm_tag
+from .sam_tags import SamFlags, downgrade_mm_tag, pysam_verbosity
 from .settings import DEFAULT_ALIGN_HEADER, DOWNGRADE_MM
-from .utils import FileCollection, SamFlags, pysam_verbosity
 
 T = TypeVar("T", ReadSeq, ConcatemerReadSeq, MonomerReadSeq)
 
@@ -20,6 +29,58 @@ FASTQ_EXTS = [".fastq", ".fastq.gz", ".fq", ".fastq.gz"]
 FASTA_EXTS = [".fasta", ".fa", ".fasta.gz", ".fasta.gz"]
 SAM_EXTS = [".sam", ".bam", ".cram"]
 logger = get_logger()
+
+
+@define
+class FileCollection:
+    _path_attrs: List[str]
+
+    @classmethod
+    def with_prefix(cls, prefix: Path, drop: Optional[List[str]] = None):
+        path_attrs = []
+        kwds = {}
+        for f in fields(cls):  # pyright: ignore
+            if f.name.startswith("_"):
+                continue
+            if drop and f.name in drop:
+                kwds[f.name] = None
+            else:
+                kwds[f.name] = Path(str(f.default).format(prefix=str(prefix)))
+            path_attrs.append(f.name)
+
+        return cls(
+            path_attrs=path_attrs, **kwds  # pyright: ignore [reportGeneralTypeIssues]
+        )
+
+    def __iter__(self):
+        for a in self._path_attrs:
+            yield getattr(self, a)
+
+    def items(self) -> List[Tuple[str, Optional[Path]]]:
+        return [(a, getattr(self, a)) for a in self._path_attrs]
+
+    def existing(self) -> Dict[str, Path]:
+        return {
+            key: val for key, val in self.items() if val is not None and val.exists()
+        }
+
+    def exists_any(self) -> bool:
+        return len(self.existing()) > 0
+
+    def exists_all(self) -> bool:
+        for p in self:
+            if p is not None and not p.exists():
+                return False
+        return True
+
+
+@define
+class MappingFileCollection(FileCollection):
+    bam: Path = Path("{prefix}.bam")
+    temp_bam: Path = Path("{prefix}.temp.bam")
+    concatemers: Path = Path("{prefix}.concatemers.parquet")
+    contacts: Path = Path("{prefix}.contacts.parquet")
+    unmapped: Path = Path("{prefix}.unmapped.fastq")
 
 
 @define

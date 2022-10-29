@@ -13,8 +13,8 @@ from pore_c2.aligns import (
     get_pairs,
 )
 from pore_c2.model import AlignInfo, ConcatemerCoords, MonomerReadSeq, ReadSeq
+from pore_c2.sam_tags import SamFlags
 from pore_c2.testing import Scenario, simulate_read_sequence
-from pore_c2.utils import SamFlags
 
 
 @pytest.mark.parametrize(

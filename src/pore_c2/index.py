@@ -4,8 +4,8 @@ from typing import Any, Dict, List, Optional
 from attrs import define
 from cattr.preconf.json import make_converter
 
+from .io import FileCollection
 from .log import get_logger
-from .utils import FileCollection
 
 logger = get_logger()
 

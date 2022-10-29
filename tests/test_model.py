@@ -12,9 +12,8 @@ from pore_c2.model import (
     WalkSegment,
     splits_to_intervals,
 )
-from pore_c2.sam_tags import WALK_TAG, CONCATEMER_TAG
+from pore_c2.sam_tags import WALK_TAG, SamFlags, MOLECULE_TAG
 from pore_c2.settings import DEFAULT_ALIGN_HEADER
-from pore_c2.utils import SamFlags
 
 
 @pytest.mark.parametrize(

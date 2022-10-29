@@ -1,11 +1,17 @@
 from typing import List
 
 import pytest
+from attrs import fields_dict
 from pysam import AlignedSegment, AlignmentHeader
 
 from pore_c2.model import ConcatemerCoords
-from pore_c2.sam_tags import downgrade_mm_tag, tag_tuple_to_str
-from pore_c2.utils import pysam_verbosity
+from pore_c2.sam_tags import (
+    SamEnum,
+    SamFlags,
+    downgrade_mm_tag,
+    pysam_verbosity,
+    tag_tuple_to_str,
+)
 
 
 def make_mock_aligned_segment(tags: List[str]):
@@ -81,3 +87,62 @@ def test_pysam_still_broken(mm_tag):
     with pysam_verbosity(0):
         align = make_mock_aligned_segment([mm_tag, "ML:B:C,122,128"])
         assert align.modified_bases is None
+
+
+def test_sam_flags():
+    for key, _ in fields_dict(SamFlags).items():  # pyright: ignore
+        for tf in (True, False):
+            flags = SamFlags(**{key: tf})
+            assert getattr(flags, key) == tf
+            integer_val = flags.to_int()
+            _ = SamFlags.from_int(integer_val)
+            assert _ == flags
+
+    flags = SamFlags.from_int(3844)
+    assert flags == SamFlags(
+        unmap=True, secondary=True, qcfail=True, dup=True, supplementary=True
+    )
+
+
+# TODO: find a home for this
+def is_primary(flag: int):
+    return bool(flag & ~(SamEnum.supplementary | SamEnum.secondary | SamEnum.unmap))
+
+
+def test_mask():
+    f = SamFlags(unmap=True, secondary=True).to_int()
+    assert bool(f & SamEnum.unmap)
+    # assert(bool(SamEnum['unmap'].value & f.to_int()) is True)
+
+
+def test_align_categories():
+    flags = [
+        SamFlags(unmap=True),
+        SamFlags(secondary=True),
+        SamFlags(supplementary=True),
+        SamFlags(),
+    ]
+    categories = [_.category for _ in flags]
+    assert [c.name for c in categories] == [
+        "unmapped",
+        "secondary",
+        "supplementary",
+        "primary",
+    ]
+    assert [c.name for c in sorted(categories)] == [
+        "primary",
+        "unmapped",
+        "supplementary",
+        "secondary",
+    ]
+
+
+def test_strand():
+    flags = [
+        SamFlags(),
+        SamFlags(reverse=True),
+        SamFlags(unmap=True),
+        SamFlags(secondary=True),
+    ]
+    strands = [SamFlags.int_to_strand(_.to_int()) for _ in flags]
+    assert strands == ["+", "-", ".", "+"]

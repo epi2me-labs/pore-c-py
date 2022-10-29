@@ -3,29 +3,13 @@ from collections import Counter
 from dataclasses import dataclass
 from functools import lru_cache
 from itertools import combinations, groupby
-from pathlib import Path
-from typing import TYPE_CHECKING, Iterable, List, Literal, Optional, Tuple
-
-from attrs import define
+from typing import Iterable, List, Literal, Optional, Tuple
 
 from .log import get_logger
 from .model import AlignInfo, MonomerReadSeq, Walk
-from .sam_tags import MOLECULE_TAG, WALK_TAG
-from .utils import AlignCategory, FileCollection, SamFlags
+from .sam_tags import WALK_TAG, AlignCategory, SamFlags, MOLECULE_TAG
 
 logger = get_logger()
-
-if TYPE_CHECKING:
-    pass
-
-
-@define
-class MappingFileCollection(FileCollection):
-    bam: Path = Path("{prefix}.bam")
-    temp_bam: Path = Path("{prefix}.temp.bam")
-    concatemers: Path = Path("{prefix}.concatemers.parquet")
-    contacts: Path = Path("{prefix}.contacts.parquet")
-    unmapped: Path = Path("{prefix}.unmapped.fastq")
 
 
 def group_aligns_by_concatemers(
@@ -193,35 +177,6 @@ class PairData:
             flags[x].secondary = align_flags[x].secondary
         return flags
 
-        # l_flag, r_flag = left.flags.copy(), right.flags.copy()
-        # l_flag.read2, r_flag.read1 = False, False
-        # l_flag.read1, r_flag.read2 = True, True
-        # l_flag.proper_pair, r_flag.proper_pair = proper_pair, proper_pair
-
-        # if right.align_info:
-        #    l_flag.munmap = False
-        #    l_flag.mreverse = right.align_info.strand == "-"
-        #    if left.align_info is not None:
-        #        next_ref = (
-        #            "="
-        #            if (left.align_info.ref_name == right.align_info.ref_name)
-        #            else right.align_info.ref_name
-        #        )
-        #    else:
-        #        next_ref = right.align_info.ref_name
-        #    next_pos = right.align_info.ref_pos + 1
-        #    self.write_record(
-        #        left,
-        #        read_name=l_read_name,
-        #        flag=l_flag,
-        #        next_reference_name=next_ref,
-        #        next_reference_start=next_pos,
-        #    )
-        # else:
-        #    l_flag.munmap = True
-
-        # raise NotImplementedError
-
     @classmethod
     def from_monomer_pair(
         cls, left: MonomerReadSeq, right: MonomerReadSeq, pair_idx: int = -1
@@ -291,20 +246,3 @@ def get_concatemer_align_string(sorted_aligns: List[MonomerReadSeq]) -> str:
             return f"{a.ref_name}:{a.ref_pos}_{a.ref_pos + a.length}"
 
     return ",".join([_to_str(_) for _ in _aligns])
-
-
-# TODO: delete this once we're sure we don't need it
-# def map_concatemer_read(
-#    *,
-#    aligner: mp.Aligner,
-#    read: MonomerReadSeq,
-#    cutter: Cutter,
-#    thread_buf: Optional[mp.ThreadBuffer] = None,
-# ) -> Tuple[MonomerReadSeq, List[ReadFragment], List[mp.Alignment]]:
-#
-#    read_frags = sequence_to_read_fragments(cutter, read, store_sequence=False)
-#    hits = [
-#        list(aligner.map(read.seq[_.read_start : _.read_end], buf=thread_buf))
-#        for _ in read_frags
-#    ]
-#    return (read, read_frags, hits)
