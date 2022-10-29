@@ -12,7 +12,7 @@ from pore_c2.model import (
     WalkSegment,
     splits_to_intervals,
 )
-from pore_c2.sam_tags import WALK_TAG, SamFlags, MOLECULE_TAG
+from pore_c2.sam_utils import CONCATEMER_TAG, MOLECULE_TAG, WALK_TAG, SamFlags
 from pore_c2.settings import DEFAULT_ALIGN_HEADER
 
 

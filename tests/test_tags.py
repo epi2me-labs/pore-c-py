@@ -5,7 +5,8 @@ from attrs import fields_dict
 from pysam import AlignedSegment, AlignmentHeader
 
 from pore_c2.model import ConcatemerCoords
-from pore_c2.sam_tags import (
+from pore_c2.sam_utils import (
+    CONCATEMER_TAG,
     SamEnum,
     SamFlags,
     downgrade_mm_tag,

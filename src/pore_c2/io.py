@@ -19,7 +19,7 @@ from pysam import AlignmentFile, AlignmentHeader, FastaFile, FastxFile
 from .aligns import get_pairs
 from .log import get_logger
 from .model import ConcatemerReadSeq, MonomerReadSeq, ReadSeq
-from .sam_tags import SamFlags, downgrade_mm_tag, pysam_verbosity
+from .sam_utils import SamFlags, downgrade_mm_tag, pysam_verbosity
 from .settings import DEFAULT_ALIGN_HEADER, DOWNGRADE_MM
 
 T = TypeVar("T", ReadSeq, ConcatemerReadSeq, MonomerReadSeq)

@@ -9,12 +9,13 @@ import pysam
 from attrs import asdict, define, fields_dict
 from pysam import AlignedSegment
 
-
-@contextmanager
-def pysam_verbosity(level: int = 0):
-    current = pysam.set_verbosity(level)
-    yield
-    pysam.set_verbosity(current)
+TAG_MI_RE = re.compile(r"MI\:Z\:(\S+)")
+# XC==concatemer metadata
+TAG_XC_RE = re.compile(
+    r"Xc:B:i,(?P<start>\d+),(?P<end>\d+),(?P<subread_idx>\d+),(?P<subread_total>\d+)"
+)
+# XW==walk metadata
+TAG_XW_RE = re.compile(r"Xw\:Z\:(.+)")  # TODO fill this out
 
 
 # MM:Z:([ACGTUN][-+]([a-z]+|[0-9]+)[.?]?(,[0-9]+)*;)*
@@ -29,11 +30,18 @@ MOD_RE = re.compile(
 MOD_TAGS = {"Ml", "ML", "Mm", "MM"}
 MM_TAG_SKIP_SCHEME_RE = re.compile(r"[.?]")
 
-MOLECULE_TAG="MI"
+MOLECULE_TAG = "MI"
 WALK_TAG = "Xw"
 CONCATEMER_TAG = "Xc"
 #  <alpha-num><alpha-num>:<type>:<data>
 FASTQ_TAG_RE = re.compile(r"(?P<tag>\w\w):(?P<type>[ABfHiZ]):(?P<data>\S+)")
+
+
+WALK_SEGMENT_RE = re.compile(
+    r"(?P<chrom>(\S+?)):(?P<orientation>[+-]):"
+    r"(?P<genome_start>\d+)-(?P<genome_end>\d+):"
+    r"(?P<read_start>\d+)-(?P<read_end>\d+)"
+)
 
 # copied from pysam.libcalignedsegment.pyx
 SAM_TYPES = "iiiiiif"
@@ -43,19 +51,11 @@ ARRAY_TO_HTSLIB_TRANS = str.maketrans(PARRAY_TYPES, HTSLIB_TYPES)
 PYSAM_TO_SAM_TRANS = str.maketrans(HTSLIB_TYPES, SAM_TYPES)
 
 
-TAG_MI_RE = re.compile(r"MI\:Z\:(\S+)")
-# XC==concatemer metadata
-TAG_XC_RE = re.compile(
-    r"Xc:B:i,(?P<start>\d+),(?P<end>\d+),(?P<subread_idx>\d+),(?P<subread_total>\d+)"
-)
-# XW==walk metadata
-TAG_XW_RE = re.compile(r"Xw\:Z\:(.+)")  # TODO fill this out
-
-WALK_SEGMENT_RE = re.compile(
-    r"(?P<chrom>(\S+?)):(?P<orientation>[+-]):"
-    r"(?P<genome_start>\d+)-(?P<genome_end>\d+):"
-    r"(?P<read_start>\d+)-(?P<read_end>\d+)"
-)
+@contextmanager
+def pysam_verbosity(level: int = 0):
+    current = pysam.set_verbosity(level)
+    yield
+    pysam.set_verbosity(current)
 
 
 def tag_tuple_to_str(key: str, val: Any, value_type: str):

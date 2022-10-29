@@ -28,7 +28,7 @@ from pore_c2.model import (
     WalkSegment,
 )
 from pore_c2.monomers import GenomicFragment
-from pore_c2.settings import MOLECULE_TAG
+from pore_c2.sam_utils import MOLECULE_TAG
 
 from .io import FileCollection
 from .log import get_logger

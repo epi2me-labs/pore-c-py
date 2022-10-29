@@ -7,7 +7,7 @@ from typing import Iterable, List, Literal, Optional, Tuple
 
 from .log import get_logger
 from .model import AlignInfo, MonomerReadSeq, Walk
-from .sam_tags import WALK_TAG, AlignCategory, SamFlags, MOLECULE_TAG
+from .sam_utils import MOLECULE_TAG, WALK_TAG, AlignCategory, SamFlags
 
 logger = get_logger()
 

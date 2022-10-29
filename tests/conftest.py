@@ -6,7 +6,7 @@ import pytest
 from typer.testing import CliRunner
 
 from pore_c2.model import AlignInfo, ConcatemerCoords, MonomerReadSeq, ReadSeq
-from pore_c2.settings import MOLECULE_TAG
+from pore_c2.sam_utils import MOLECULE_TAG
 from pore_c2.testing import Scenario
 
 
