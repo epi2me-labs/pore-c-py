@@ -161,6 +161,7 @@ def create_test_data(
         temp_path=base_dir,
         p_cis=p_cis,
         mean_frags_per_concatemer=mean_frags_per_concatemer,
+        max_frags_per_concatemer=max_frags_per_concatemer,
     )
     logger.info(f"Creating scenario: {scenario}")
     logger.info(f"Genome fasta: {scenario.reference_fasta}")

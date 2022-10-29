@@ -12,12 +12,8 @@ from pore_c2.model import (
     WalkSegment,
     splits_to_intervals,
 )
-from pore_c2.settings import (
-    CONCATEMER_TAG,
-    DEFAULT_ALIGN_HEADER,
-    MOLECULE_TAG,
-    WALK_TAG,
-)
+from pore_c2.sam_tags import WALK_TAG, CONCATEMER_TAG
+from pore_c2.settings import DEFAULT_ALIGN_HEADER
 from pore_c2.utils import SamFlags
 
 
@@ -162,33 +158,24 @@ def concatemer_aligned_strand() -> AlignedSegment:
 
 def test_unaligned_round_trip(concatemer_unaligned: AlignedSegment):
     rs = ReadSeq.from_align(concatemer_unaligned)
-    assert rs.name == concatemer_unaligned.query_name
-    assert rs.sequence == concatemer_unaligned.query_sequence
-    assert rs.quality == concatemer_unaligned.qual
     dest = rs.to_align()
-    assert dest.tostring() == concatemer_unaligned.tostring()
+    assert dest.tostring() == concatemer_unaligned.tostring()  # type: ignore
 
 
 def test_aligned_round_trip(concatemer_aligned: AlignedSegment):
     rs = ReadSeq.from_align(concatemer_aligned)
-    assert rs.name == concatemer_aligned.query_name
-    assert rs.sequence == concatemer_aligned.query_sequence
-    assert rs.quality == concatemer_aligned.qual
     dest = rs.to_align(
         header=AlignmentHeader.from_dict({"SQ": [{"SN": "chr1", "LN": 1000}]})
     )
-    assert dest.tostring() == concatemer_aligned.tostring()
+    assert dest.tostring() == concatemer_aligned.tostring()  # type: ignore
 
 
 def test_aligned_strand_round_trip(concatemer_aligned_strand: AlignedSegment):
     rs = ReadSeq.from_align(concatemer_aligned_strand)
-    assert rs.name == concatemer_aligned_strand.query_name
-    assert rs.sequence == concatemer_aligned_strand.query_sequence
-    assert rs.quality == concatemer_aligned_strand.qual
     dest = rs.to_align(
         header=AlignmentHeader.from_dict({"SQ": [{"SN": "chr1", "LN": 1000}]})
     )
-    assert dest.tostring() == concatemer_aligned_strand.tostring()
+    assert dest.tostring() == concatemer_aligned_strand.tostring()  # type: ignore
 
 
 def test_group_monomer_aligns(monomer_read_seqs):
@@ -236,10 +223,20 @@ def test_split_read(concatemer_unaligned: AlignedSegment):
     )
     monomers = concatemer.split([5])
     for idx, s in [(0, slice(None, 5)), (1, slice(5, None))]:
-        assert monomers[idx].read_seq.sequence == concatemer_unaligned.seq[s]
-        assert monomers[idx].read_seq.quality == concatemer_unaligned.qual[s]
-    assert monomers[0].to_align().modified_bases == {("C", 0, "m"): [(2, 122)]}
-    assert monomers[1].to_align().modified_bases == {("C", 0, "m"): [(5, 128)]}
+        assert (
+            monomers[idx].read_seq.sequence
+            == concatemer_unaligned.seq[s]  # type: ignore
+        )
+        assert (
+            monomers[idx].read_seq.quality
+            == concatemer_unaligned.qual[s]  # type: ignore
+        )
+    assert monomers[0].to_align().modified_bases == {  # type: ignore
+        ("C", 0, "m"): [(2, 122)]
+    }
+    assert monomers[1].to_align().modified_bases == {  # type: ignore
+        ("C", 0, "m"): [(5, 128)]
+    }
 
 
 @pytest.mark.parametrize(

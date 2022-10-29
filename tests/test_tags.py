@@ -3,8 +3,8 @@ from typing import List
 import pytest
 from pysam import AlignedSegment, AlignmentHeader
 
-from pore_c2.model import ConcatemerCoords, downgrade_mm_tag, tag_tuple_to_str
-from pore_c2.settings import CONCATEMER_TAG
+from pore_c2.model import ConcatemerCoords
+from pore_c2.sam_tags import downgrade_mm_tag, tag_tuple_to_str
 from pore_c2.utils import pysam_verbosity
 
 
@@ -68,7 +68,9 @@ def test_tag_roundtrip_w_downgrade(tag_str):
 def test_fix_mod_tags(mm_tag):
     align = make_mock_aligned_segment([mm_tag, "ML:B:C,122,128"])
     align1 = downgrade_mm_tag(align)
-    assert align1.modified_bases == {("C", 0, "m"): [(2, 122), (10, 128)]}
+    assert align1.modified_bases == {  # type: ignore
+        ("C", 0, "m"): [(2, 122), (10, 128)]
+    }
 
 
 @pytest.mark.parametrize(
@@ -78,4 +80,4 @@ def test_fix_mod_tags(mm_tag):
 def test_pysam_still_broken(mm_tag):
     with pysam_verbosity(0):
         align = make_mock_aligned_segment([mm_tag, "ML:B:C,122,128"])
-        align.modified_bases is None
+        assert align.modified_bases is None

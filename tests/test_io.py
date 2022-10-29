@@ -1,7 +1,7 @@
 from pathlib import Path
 
 import pytest
-from pysam import fqimport
+from pysam import fqimport  # type: ignore
 
 from pore_c2.io import find_files, iter_reads
 

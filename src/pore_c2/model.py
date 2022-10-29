@@ -1,5 +1,3 @@
-import array
-import re
 from abc import ABCMeta, abstractmethod
 from dataclasses import dataclass
 from typing import Any, Dict, List, Literal, Mapping, Optional, Tuple
@@ -8,73 +6,9 @@ from attrs import Factory, define
 from Bio.Seq import Seq
 from pysam import AlignedSegment, FastxRecord
 
-from .settings import (
-    CONCATEMER_TAG,
-    DEFAULT_ALIGN_HEADER,
-    FASTQ_TAG_RE,
-    MOD_TAGS,
-    MOLECULE_TAG,
-)
+from .sam_tags import FASTQ_TAG_RE, MOD_TAGS, WALK_SEGMENT_RE, tag_tuple_to_str
+from .settings import DEFAULT_ALIGN_HEADER
 from .utils import SamFlags
-
-# copied from pysam.libcalignedsegment.pyx
-SAM_TYPES = "iiiiiif"
-HTSLIB_TYPES = "cCsSiIf"
-PARRAY_TYPES = "bBhHiIf"
-
-MM_TAG_SKIP_SCHEME_RE = re.compile(r"[.?]")
-
-ARRAY_TO_HTSLIB_TRANS = str.maketrans(PARRAY_TYPES, HTSLIB_TYPES)
-PYSAM_TO_SAM_TRANS = str.maketrans(HTSLIB_TYPES, SAM_TYPES)
-
-WALK_SEGMENT_RE = re.compile(
-    r"(?P<chrom>(\S+?)):(?P<orientation>[+-]):"
-    r"(?P<genome_start>\d+)-(?P<genome_end>\d+):"
-    r"(?P<read_start>\d+)-(?P<read_end>\d+)"
-)
-
-
-def tag_tuple_to_str(key: str, val: Any, value_type: str):
-    # TODO not sure if this works for H
-    value_type = value_type.translate(PYSAM_TO_SAM_TRANS)
-    if value_type == "B":
-        assert isinstance(val, array.array)
-        elemtype = val.typecode.translate(ARRAY_TO_HTSLIB_TRANS)
-        val = ",".join(map(str, val))
-        res = f"{key}:{value_type}:{elemtype},{val}"
-    elif value_type in "AfiZ":
-        res = f"{key}:{value_type}:{val}"
-    else:
-        # hope that python string formatting is correct
-        # TODO: warn about this?
-        res = f"{key}:{value_type}:{val}"
-    if ":S:" in res:
-        raise ValueError(key, val, value_type)
-    return res
-
-
-def downgrade_mm_tag(align: AlignedSegment) -> AlignedSegment:
-    tag, orig_tag = None, None
-    for tag in ["MM", "Mm"]:
-        try:
-            orig_tag = align.get_tag(tag)
-        except KeyError:
-            continue
-        if orig_tag:
-            break
-    # alignment doesn't have tag, return
-    if not orig_tag:
-        return align
-    assert isinstance(orig_tag, str)
-    m = MM_TAG_SKIP_SCHEME_RE.search(orig_tag)
-    # tag does't contain skip_scheme character
-    if not m or not tag:
-        return align
-    new_tag = f"{tag}:Z:" + MM_TAG_SKIP_SCHEME_RE.sub("", orig_tag)
-    d = align.to_dict()
-    d["tags"] = [t for t in d["tags"] if not t.startswith(tag)] + [new_tag]
-    return AlignedSegment.from_dict(d, header=align.header)
-
 
 class Cutter(metaclass=ABCMeta):
     @abstractmethod
@@ -249,16 +183,16 @@ class ReadSeq:
         else:
             flags = SamFlags.from_int(rec.flag)
             align_info = AlignInfo(
-                ref_name=rec.reference_name,
+                ref_name=rec.reference_name,  # type: ignore
                 ref_pos=rec.reference_start,
                 flag=rec.flag,
                 map_quality=rec.mapping_quality,
-                cigar=rec.cigarstring,
+                cigar=rec.cigarstring,  # type: ignore
                 template_length=rec.template_length,
-                length=rec.reference_end - rec.reference_start,
+                length=rec.reference_end - rec.reference_start,  # type: ignore
             )
         if init_mod_bases:
-            mod_bases = rec.modified_bases
+            mod_bases = rec.modified_bases  # type: ignore
             if not mod_bases:
                 mod_bases = None
         else:
@@ -269,9 +203,9 @@ class ReadSeq:
         else:
             next_align = None
         return cls(
-            name=rec.query_name,
-            sequence=rec.query_sequence,
-            quality=rec.qual,
+            name=rec.query_name,  # type: ignore
+            sequence=rec.query_sequence,  # type: ignore
+            quality=rec.qual,  # type: ignore
             flags=flags,
             tags=tags,
             mod_bases=mod_bases,
@@ -317,25 +251,7 @@ class ReadSeq:
         if is_unmapped or flag.paired is False:
             template_length = 0
         elif template_length is None:
-            template_length = self.align_info.template_length
-
-        # if as_unaligned or self.next_align is None:
-        #    next_reference_name = "*"
-        #    next_reference_start = 0
-        #    flag.proper_pair = False
-        # elif self.next_align:
-        #    next_reference_name, next_reference_start = self.next_align
-        #    next_reference_start += 1  # adjust for sam
-        #    if next_reference_start is None:
-        #        raise ValueError(self.next_align)
-        #    if not self.align_info:
-        #        flag.proper_pair = False
-        #    elif self.align_info.ref_name == next_reference_name:
-        #        next_reference_name = "="
-
-        # else:
-        #    raise ValueError(self)
-
+            template_length = self.align_info.template_length  # type: ignore
         if is_unmapped:
             sam_str = (
                 # QNAME,FLAG,RNAME,POS
@@ -350,12 +266,15 @@ class ReadSeq:
                 f"{tags}"
             )
         else:
+            assert self.align_info is not None
             sam_str = (
                 # QNAME,FLAG,RNAME,POS
                 f"{read_name}\t{flag.to_int()}\t"
-                f"{self.align_info.ref_name}\t{self.align_info.ref_pos + 1}\t"
+                f"{self.align_info.ref_name}\t"
+                f"{self.align_info.ref_pos + 1}\t"
                 # MAPQ,CIGAR
-                f"{self.align_info.map_quality}\t{self.align_info.cigar}\t"
+                f"{self.align_info.map_quality}\t"
+                f"{self.align_info.cigar}\t"
                 # RNEXT,PNEXT
                 f"{next_reference_name}\t{next_reference_start}\t"
                 # TLEN
@@ -580,7 +499,7 @@ class WalkSegment:
     chrom: Optional[str] = None
     genome_start: Optional[int] = None
     genome_end: Optional[int] = None
-    orientation: Optional[Literal["+", "-"]] = None
+    orientation: Optional[Literal["+", "-", "."]] = None
 
     @classmethod
     def from_monomer(cls, monomer: MonomerReadSeq):
@@ -621,7 +540,7 @@ class WalkSegment:
                     chrom=_["chrom"],
                     genome_start=int(_["genome_start"]),
                     genome_end=int(_["genome_end"]),
-                    orientation=_["orientation"],
+                    orientation=_["orientation"],  # type: ignore
                 )
 
     def to_string(self) -> str:

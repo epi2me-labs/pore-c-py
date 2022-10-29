@@ -147,5 +147,5 @@ class SamFlags:
     @lru_cache
     def int_to_category(
         flag: int,
-    ) -> Literal["primary", "secondary", "supplementary", "unmapped"]:
+    ) -> AlignCategory:
         return SamFlags.from_int(flag).category

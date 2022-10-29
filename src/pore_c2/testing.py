@@ -14,14 +14,8 @@ import numpy.typing as npt
 import polars as pl
 from attrs import define
 from numpy.random import Generator, default_rng
-from pysam import (
-    FastaFile,
-    VariantFile,
-    VariantHeader,
-    faidx,
-    tabix_compress,
-    tabix_index,
-)
+from pysam import faidx  # type: ignore
+from pysam import FastaFile, VariantFile, VariantHeader, tabix_compress, tabix_index
 
 from pore_c2.model import (
     AlignInfo,
@@ -112,7 +106,12 @@ def build_monomer(
     else:
         allele_values, offsets = None, None
 
-    _seq, _offsets, _alleles = simulate_read_sequence(
+    # make type checker happy
+    assert segment.chrom is not None
+    assert segment.genome_start is not None
+    assert segment.genome_end is not None
+
+    _seq, _, _ = simulate_read_sequence(
         ff=ff,
         chrom=segment.chrom,
         start=segment.genome_start,
@@ -167,7 +166,6 @@ def random_concatemer_generator(
     *,
     reference_fasta: FastaFile,
     fragments_df: pl.DataFrame,
-    p_cis: float = 0.8,
     contact_probs: npt.NDArray[np.float_],
     random_state: Generator,
     mean_frags_per_concatemer: int = 5,
@@ -216,7 +214,7 @@ def random_concatemer_generator(
             read_seq=ReadSeq(
                 name=concatemer_id,
                 sequence="".join([m.read_seq.sequence for m in monomers]),
-                quality="".join([m.read_seq.quality for m in monomers]),
+                quality="".join([m.read_seq.quality for m in monomers]),  # type: ignore
             ),
         )
         yield (concatemer, monomers, walk, haplotype)
@@ -354,9 +352,9 @@ def assign_snps_to_fragments(
         )
     )
     return (
-        df["pos"].to_list(),
-        df["offset"].to_list(),
-        df["fragment_id"].to_list(),
+        df["pos"].to_list(),  # type: ignore
+        df["offset"].to_list(),  # type: ignore
+        df["fragment_id"].to_list(),  # type: ignore
     )
 
 
@@ -587,7 +585,6 @@ def simulate_concatemer_fastqs(
     mean_frags_per_concatemer: int = 5,
     max_frags_per_concatemer: int = 50,
     snp_haplotypes: Optional[List[SNPHaplotypes]] = None,
-    num_haplotypes: int = 0,
     random_state: Optional[Generator] = None,
     contact_probs: Optional[npt.NDArray[np.float_]] = None,
 ) -> Tuple[
@@ -620,6 +617,8 @@ def simulate_concatemer_fastqs(
         random_state=random_state,
         max_concatemers=num_concatemers,
         fragment_to_snps=fragment_to_snps,
+        mean_frags_per_concatemer=mean_frags_per_concatemer,
+        max_frags_per_concatemer=max_frags_per_concatemer,
     )
     outfh = fastq.open("w")
     if monomer_fastq:
@@ -654,6 +653,7 @@ def monomers_to_dataframe(
 
     for x, _m in enumerate(monomers):
         for m in _m:
+            assert m.read_seq.align_info is not None
             data.append(
                 {
                     "monomer_id": m.monomer_id,
@@ -803,6 +803,8 @@ class Scenario:
     def phased_vcf(self):
         vcf = self.fc.phased_vcf
         if not vcf.exists():
+            if self.snp_haplotypes is None:
+                raise ValueError("Can't created phased vcf without snps")
             create_phased_vcf(self.snp_haplotypes, vcf, self.reference_fasta)
         return vcf
 
@@ -840,7 +842,6 @@ class Scenario:
             self.fragments_df,
             monomer_fastq=self.fc.monomer_fastq,
             snp_haplotypes=self.snp_haplotypes,
-            num_haplotypes=self.num_haplotypes,
             random_state=self.random_state,
             num_concatemers=self.num_concatemers,
             p_cis=self.p_cis,

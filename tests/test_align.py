@@ -65,7 +65,7 @@ def test_mappy_snvs(
 
 def _make_mock_monomer_aligns(
     data: List[Tuple[int, int, str, int, Optional[SamFlags]]]
-):
+) -> List[MonomerReadSeq]:
     monomers = []
     concatemer_id = "C"
     subread_total = len(set([_[0] for _ in data]))
@@ -247,7 +247,7 @@ def test_relative_ori():
     for f1, f2 in combinations(flags, 2):
         m = _make_mock_monomer_aligns([(0, 5, "chr1", 0, f1), (5, 10, "chr1", 10, f2)])
         _, _, pair_data = zip(*get_pairs(m, direct_only=False))
-        ori = pair_data[0].relative_ori
+        ori = pair_data[0].relative_ori  # type: ignore
         strand_pair = (f1.strand, f2.strand)
         if strand_pair in [("+", "+"), ("-", "-")]:
             assert ori is True
@@ -281,7 +281,7 @@ def test_read_pair_to_sam():
         )
         pair_data = PairData.from_monomer_pair(left, right)
         l_flags, r_flags = pair_data.to_flags(
-            [left.read_seq.flags, right.read_seq.flags]
+            (left.read_seq.flags, right.read_seq.flags)
         )
         assert l_flags.paired is True
         assert r_flags.paired is True

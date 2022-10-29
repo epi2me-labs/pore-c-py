@@ -60,7 +60,7 @@ profile = "black"
 known_first_party = "aws_interfacing"
 
 [tool.pyright]
-include = ["src"]
+include = ["src", "tests"]
 exclude = ["**/__pycache__", ".venv", "scratch"]
 venvPath = "./."
 venv = ".venv"

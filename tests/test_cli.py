@@ -86,6 +86,9 @@ def test_process_monomer_alignments(name_sorted_bam, tmp_path):
     writer = process_monomer_alignments(name_sorted_bam, prefix, paired_end=True)
 
     writer.close()
+
+    assert writer.ns_writer is not None
+    assert writer.pe_writer is not None
     monomer_bam.exists()
 
     with pysam_verbosity(0):

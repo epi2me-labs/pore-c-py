@@ -8,7 +8,8 @@ from pysam import AlignmentFile, AlignmentHeader, FastaFile, FastxFile
 
 from .aligns import get_pairs
 from .log import get_logger
-from .model import ConcatemerReadSeq, MonomerReadSeq, ReadSeq, downgrade_mm_tag
+from .model import ConcatemerReadSeq, MonomerReadSeq, ReadSeq
+from .sam_tags import downgrade_mm_tag
 from .settings import DEFAULT_ALIGN_HEADER, DOWNGRADE_MM
 from .utils import FileCollection, SamFlags, pysam_verbosity
 
@@ -117,9 +118,7 @@ class SamWriter(Writer):
 
 
 class PairedEndWriter(SamWriter):
-    def write_records(
-        self, concatemer_id: str, recs: List[MonomerReadSeq], direct_only: bool = True
-    ):
+    def write_records(self, recs: List[MonomerReadSeq], direct_only: bool = True):
         if len(recs) == 1:
             self.write_record(recs[0].read_seq)
         else:
@@ -135,6 +134,7 @@ class PairedEndWriter(SamWriter):
                     )
                     l_sam_kwds, r_sam_kwds = {}, {}
                     if not l_flag.munmap:
+                        assert right.read_seq.align_info is not None
                         l_sam_kwds["next_reference_name"] = (
                             "="
                             if pair_data.is_cis is True
@@ -144,6 +144,7 @@ class PairedEndWriter(SamWriter):
                             "next_reference_start"
                         ] = right.read_seq.align_info.ref_pos
                     if not r_flag.munmap:
+                        assert left.read_seq.align_info is not None
                         r_sam_kwds["next_reference_name"] = (
                             "="
                             if pair_data.is_cis is True
@@ -154,11 +155,11 @@ class PairedEndWriter(SamWriter):
                         ] = left.read_seq.align_info.ref_pos
                     if pair_data.is_cis:
                         template_length = max(
-                            left.read_seq.align_info.ref_end,
-                            right.read_seq.align_info.ref_end,
+                            left.read_seq.align_info.ref_end,  # type: ignore
+                            right.read_seq.align_info.ref_end,  # type: ignore
                         ) - min(
-                            left.read_seq.align_info.ref_pos,
-                            right.read_seq.align_info.ref_pos,
+                            left.read_seq.align_info.ref_pos,  # type: ignore
+                            right.read_seq.align_info.ref_pos,  # type: ignore
                         )
                     else:
                         template_length = 0
@@ -175,47 +176,10 @@ class PairedEndWriter(SamWriter):
                         template_length=template_length,
                         **r_sam_kwds,
                     )
-
-                #    raise ValueError(l_flag, r_flag)
-                # for pair_idx, (left, right) in enumerate(zip(walk[:-1], walk[1:])):
-                #    proper_pair = ~(left.flags.unmap or right.flags.unmap)
-                #    pair_id = f"{concatemer_id}:{pair_idx}"
-                #    l_read_name, r_read_name = pair_id + "/1", pair_id + "/2"
-                #    l_flag, r_flag = left.flags.copy(), right.flags.copy()
-                #    l_flag.read2, r_flag.read1 = False, False
-                #    l_flag.read1, r_flag.read2 = True, True
-                #    l_flag.proper_pair, r_flag.proper_pair = proper_pair, proper_pair
-
-                #    if right.align_info:
-                #        l_flag.munmap = False
-                #        l_flag.mreverse = right.align_info.strand == "-"
-                #        if left.align_info is not None:
-                #            next_ref = (
-                #                "="
-                #                if (
-                #                    left.align_info.ref_name
-                #                    == right.align_info.ref_name
-                #                )
-                #                else right.align_info.ref_name
-                #            )
-                #        else:
-                #            next_ref = right.align_info.ref_name
-                #        next_pos = right.align_info.ref_pos + 1
-                #        self.write_record(
-                #            left,
-                #            read_name=l_read_name,
-                #            flag=l_flag,
-                #            next_reference_name=next_ref,
-                #            next_reference_start=next_pos,
-                #        )
-                #    else:
-                #        l_flag.munmap = True
-                #        self.write_record(left, flag=l_flag)
-                #    self.write_record(right, read_name=r_read_name, flag=r_flag)
-
+            # write any qc fail records
             if len(walk) != len(recs):
                 for rec in recs:
-                    if rec.flags.qcfail:
+                    if rec.read_seq.flags.qcfail:
                         self.write_record(rec.read_seq)
 
 
@@ -239,11 +203,11 @@ class AnnotatedMonomerWriter(Writer):
         return cls(ns_writer=ns_writer, pe_writer=pe_writer)
 
     def consume(self, annotated_stream: Iterable[Tuple[str, List[MonomerReadSeq]]]):
-        for concatemer_id, read_seqs in annotated_stream:
+        for _, read_seqs in annotated_stream:
             if self.ns_writer:
                 [self.ns_writer.write_record(_.read_seq) for _ in read_seqs]
             if self.pe_writer:
-                self.pe_writer.write_records(concatemer_id, read_seqs)
+                self.pe_writer.write_records(read_seqs)
 
     def close(self):
         if self.ns_writer:
@@ -299,11 +263,14 @@ def iter_reads(
     format, reader = get_raw_reader(src, reader_kwds=reader_kwds)
     if format == "sam":
         for rec in reader:
-            if primary_only and (rec.is_supplementary or rec.is_secondary):
+
+            if primary_only and (
+                rec.is_supplementary or rec.is_secondary  # type: ignore
+            ):
                 continue
             if DOWNGRADE_MM:
-                rec = downgrade_mm_tag(rec)
-            yield ReadSeq.from_align(rec, as_unaligned=as_unaligned)
+                rec = downgrade_mm_tag(rec)  # type: ignore
+            yield ReadSeq.from_align(rec, as_unaligned=as_unaligned)  # type: ignore
     else:
         for rec in reader:
             yield ReadSeq.from_fastq(rec)

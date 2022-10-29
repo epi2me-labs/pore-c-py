@@ -10,7 +10,7 @@ from attrs import define
 
 from .log import get_logger
 from .model import AlignInfo, MonomerReadSeq, Walk
-from .settings import MOLECULE_TAG, WALK_TAG
+from .sam_tags import MOLECULE_TAG, WALK_TAG
 from .utils import AlignCategory, FileCollection, SamFlags
 
 logger = get_logger()
@@ -94,7 +94,7 @@ def annotate_monomer_alignments(
 def sort_aligns_by_concatemer_idx(
     aligns: List[MonomerReadSeq], validate: bool = True
 ) -> List[MonomerReadSeq]:
-    subread_idx, orig_idx = zip(
+    _, orig_idx = zip(
         *sorted([(a.coords.subread_idx, x) for x, a in enumerate(aligns)])
     )
     new_aligns = [aligns[i] for i in orig_idx]
@@ -128,16 +128,6 @@ def get_pairs(
 
 def set_walk_tag(align: MonomerReadSeq, walk_str: str):
     align.read_seq.tags[WALK_TAG] = f"{WALK_TAG}:Z:{walk_str}"
-
-
-def set_next_read(left: MonomerReadSeq, right: MonomerReadSeq):
-    return
-    # if right.ref_name != "*":
-    #    if right.ref_name == left.ref_name:
-    #        left.next_ref_name = "="
-    #    else:
-    #        left.next_ref_name = right.ref_name
-    #    left.next_ref_pos = right.ref_pos
 
 
 class PairAlignState(enum.IntEnum):
@@ -253,19 +243,19 @@ class PairData:
         else:
             l_align = left.read_seq.align_info
             r_align = right.read_seq.align_info
-            is_cis = l_align.ref_name == r_align.ref_name
+            is_cis = l_align.ref_name == r_align.ref_name  # type: ignore
             if is_cis:
                 strands = (
-                    l_align.strand,
-                    r_align.strand,
+                    l_align.strand,  # type: ignore
+                    r_align.strand,  # type: ignore
                 )
                 if "." in strands:
                     relative_ori = None
                 else:
                     relative_ori = strands[0] == strands[1]
                 genome_distance = calculate_genomic_distance(
-                    (l_align.strand, l_align.ref_pos, l_align.ref_end),
-                    (r_align.strand, r_align.ref_pos, r_align.ref_end),
+                    (l_align.strand, l_align.ref_pos, l_align.ref_end),  # type: ignore
+                    (r_align.strand, r_align.ref_pos, r_align.ref_end),  # type: ignore
                 )
             else:
                 relative_ori = None
@@ -283,11 +273,11 @@ class PairData:
 
 
 def calculate_genomic_distance(
-    left: Tuple[Literal["+", "-"], int, int],
-    right: Tuple[Literal["+", "-"], int, int],
+    left: Tuple[Literal["+", "-", "."], int, int],
+    right: Tuple[Literal["+", "-", "."], int, int],
 ):
-    l_coord = left[2] if left[0] == "+" else left[1]
-    r_coord = right[1] if right[0] == "+" else right[2]
+    l_coord = left[2] if (left[0] == "+" or left[0] == ".") else left[1]
+    r_coord = right[1] if (right[0] == "+" or right[0] == ".") else right[2]
     return r_coord - l_coord
 
 

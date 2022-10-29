@@ -151,7 +151,7 @@ def test_random_walk():
             [0.0, 0.0, 0.5, 0.5, 0.0],
         ]
     )
-    c = simulate_concatemers(probs, np.ones(100) * 100, rng)
+    c = simulate_concatemers(probs, np.ones(100, dtype=int) * 100, rng)
     counts = np.zeros_like(probs)
     for _ in c:
         if len(_) > 1:
