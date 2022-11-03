@@ -6,7 +6,7 @@ SEED = "42122"
 
 rule all:
     input:
-        genome="input/scenario.genome.fasta",
+        genome="input/scenario.fasta",
         metadata="output/scenario.metadata.json",
         ubam="output/scenario.monomers.bam",
         bam="output/scenario.processed.ns.bam",
@@ -14,7 +14,7 @@ rule all:
 
 rule full:
     input:
-        genome="input/scenario.genome.fasta",
+        genome="input/scenario.fasta",
         pairs="output/scenario.processed.pairs.gz",
         ht_bam="output/scenario.processed.ns.hp.bam",
         #cooler="output/scenario.processed.mcool",
@@ -22,13 +22,13 @@ rule full:
 
 rule generate_test_data:
     output:
-        genome="input/scenario.genome.fasta",
+        genome="input/scenario.fasta",
         concatemers="input/scenario.concatemers.fastq",
         vcf="input/scenario.phased_variants.vcf.gz",
     params:
         enzyme=config["enzyme"],
     shell:
-        "pore-c2 utils create-test-data input/scenario --enzyme {params.enzyme} "
+        "pore-c2 utils create-test-data input --file-prefix scenario --enzyme {params.enzyme} "
         f"--seed {SEED}"
         " --num-haplotypes 2 "
         "--genome-size 10_000 "
@@ -37,17 +37,18 @@ rule generate_test_data:
         "--num-concatemers 1000 "
         "--mean-frags-per-concatemer 10 "
         "--p-cis 0.80 "
+        "--create-truth-files "
 
 
 rule index_genome:
     output:
         metadata="output/scenario.metadata.json",
         mmi="output/scenario.mmi",
-        fai="input/scenario.genome.fasta.fai",
+        fai="input/scenario.fasta.fai",
         fragment_fasta="output/scenario.fragments.fasta",
         fragment_table="output/scenario.fragments.parquet",
     input:
-        genome="input/scenario.genome.fasta",
+        genome="input/scenario.fasta",
     params:
         enzyme=config["enzyme"],
         prefix="output/scenario",
@@ -96,7 +97,7 @@ rule process_monomer_alignments:
 rule pairtools_parse:
     input:
         bam="output/scenario.processed.ns.bam",
-        fai="input/scenario.genome.fasta.fai",
+        fai="input/scenario.fasta.fai",
     output:
         pairs="output/scenario.processed.pairs.gz",
         stats="output/scenario.processed.pairs.stats.txt",
@@ -119,7 +120,7 @@ rule pairs_to_cooler:
         cooler="output/scenario.processed.cooler",
     input:
         pairs="output/scenario.processed.pairs.gz",
-        fai="input/scenario.genome.fasta.fai",
+        fai="input/scenario.fasta.fai",
     log:
         pairs="output/scenario.processed.cooler.log",
     params:
@@ -162,7 +163,7 @@ rule sort_monomers:
 rule whatshap_haplotag:
     input:
         bam="output/scenario.processed.ns.sorted.bam",
-        fasta="input/scenario.genome.fasta",
+        fasta="input/scenario.fasta",
         vcf="input/scenario.phased_variants.vcf.gz",
     output:
         ht_bam="output/scenario.processed.ns.hp.bam",

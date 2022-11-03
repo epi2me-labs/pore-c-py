@@ -1,5 +1,6 @@
 from collections import Counter
 from dataclasses import dataclass
+from itertools import chain
 from pathlib import Path
 from typing import (
     Dict,
@@ -374,3 +375,10 @@ def get_alignment_header(
     else:
         header = AlignmentHeader.from_dict(data)
     return header
+
+
+def fastq_to_ubam(source_fastqs: List[Path], output_ubam: Path) -> Path:
+    writer = SamWriter(output_ubam)
+    src = [iter_reads(s) for s in source_fastqs]
+    writer.consume(chain(*src))
+    return output_ubam

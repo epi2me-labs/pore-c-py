@@ -146,9 +146,12 @@ def create_test_data(
     mean_frags_per_concatemer: int = 5,
     max_frags_per_concatemer: int = 10,
     seed: int = 42,
+    file_prefix: str = "porec_test",
+    create_truth_files: bool = False,
 ):
     logger = get_logger()
     logger.info(f"Creating test data at: {base_dir}")
+    temp_path = base_dir / file_prefix
     scenario = Scenario(
         seed=seed,
         genome_size=genome_size,
@@ -158,17 +161,21 @@ def create_test_data(
         num_concatemers=num_concatemers,
         num_haplotypes=num_haplotypes,
         variant_density=variant_density,
-        temp_path=base_dir,
+        temp_path=temp_path,
         p_cis=p_cis,
         mean_frags_per_concatemer=mean_frags_per_concatemer,
         max_frags_per_concatemer=max_frags_per_concatemer,
     )
     logger.info(f"Creating scenario: {scenario}")
+
     logger.info(f"Genome fasta: {scenario.reference_fasta}")
     logger.info(f"Concatemer fastq: {scenario.concatemer_fastq}")
+    logger.info(f"Concatemer ubam: {scenario.concatemer_ubam}")
     if num_haplotypes >= 2 and variant_density > 0:
         logger.info(f"Phased VCF: {scenario.phased_vcf}")
-    logger.info(f"Monomer metadata: {scenario.monomer_parquet}")
+    if create_truth_files:
+        for file_id, path in scenario.fc.truth_files():
+            logger.info(f"Truth data {file_id}: {path}")
     return scenario
 
 

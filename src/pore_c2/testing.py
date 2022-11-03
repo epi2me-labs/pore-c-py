@@ -30,7 +30,7 @@ from pore_c2.model import (
 from pore_c2.monomers import GenomicFragment
 from pore_c2.sam_utils import MOLECULE_TAG
 
-from .io import FileCollection
+from .io import FileCollection, fastq_to_ubam
 from .log import get_logger
 
 logger = get_logger()
@@ -687,13 +687,19 @@ def concatemers_to_dataframe(
 @define
 class TestScenarioFileCollection(FileCollection):
     ns_bam: Path = Path("{prefix}.name_sorted.bam")
-    reference_fasta: Path = Path("{prefix}.genome.fasta")
+    reference_fasta: Path = Path("{prefix}.fasta")
     concatemer_fastq: Path = Path("{prefix}.concatemers.fastq")
+    concatemer_ubam: Path = Path("{prefix}.concatemers.bam")
     monomer_fastq: Path = Path("{prefix}.monomer.fastq")
     monomer_parquet: Path = Path("{prefix}.monomer.pq")
     phased_vcf: Path = Path("{prefix}.phased_variants.vcf.gz")
     contact_prob: Path = Path("{prefix}.contact_probs.npy")
     params_json: Path = Path("{prefix}.params.json")
+
+    def truth_files(self):
+        for k, v in self.items():
+            if k in ["monomer_fastq", "monomer_marquet", "contact_prob", "params_json"]:
+                yield (k, v)
 
 
 @dataclass
@@ -853,6 +859,10 @@ class Scenario:
     @cached_property
     def concatemer_fastq(self) -> Path:
         return self._concatemers_res[0]
+
+    @cached_property
+    def concatemer_ubam(self) -> Path:
+        return fastq_to_ubam([self.concatemer_fastq], self.fc.concatemer_ubam)
 
     @cached_property
     def monomer_fastq(self) -> Optional[Path]:

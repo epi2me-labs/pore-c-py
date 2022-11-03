@@ -4,25 +4,39 @@ dependencies = [
     "pytest<8.0.0,>=7.1.2",
     "pytest-xdist<3.0.0,>=2.5.0",
     "pytest-cov>=3.0.0",
+    "conda-lock"
 ]
 
 [envs.default.scripts]
 test = "pytest {args}"
 cli = "pore-c2 {args}"
 cov = ["coverage run --module pytest", "coverage report --show-missing"]
+make_test_data = """
+        pore-c2 utils create-test-data \
+        $WF_POREC_ROOT/test_data \
+        --enzyme NlaIII \
+        --seed 42122 \
+        --num-haplotypes 2  \
+        --genome-size 10_000  \
+        --cut-rate 0.001 \
+        --variant-density 0.05 \
+        --num-concatemers 1000  \
+        --mean-frags-per-concatemer 10 \
+        --p-cis 0.80 \
+"""
+lock = "conda-lock -f pyproject.toml --micromamba"
+
 
 [envs.integration]
 dependencies = [
     "snakemake>=7.14.0",
     "pytest-workflow>=1.6.0",
-    "conda-lock"
 ]
 
 [envs.integration.scripts]
 test = "pytest -c tests/workflow/pytest.ini  tests/workflow/"
-lock = "conda-lock -f pyproject.toml -p linux-64 --micromamba --kind explicit"
-create = "conda create --name porec2_dev --file conda-linux-64.lock"
-update = "conda install --name porec2_dev --file conda-linux-64.lock"
+create_env = "conda create --name porec2_dev --file conda-linux-64.lock"
+update_env = "conda install --name porec2_dev --file conda-linux-64.lock"
 
 
 

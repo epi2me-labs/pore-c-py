@@ -27,7 +27,7 @@ class WorkflowFC(FileCollection):
 
 
 @pytest.mark.workflow("full")
-def test_cis_trans(workflow_dir, tol=0.1):
+def test_cis_trans(workflow_dir, tol=0.15):
     fc = WorkflowFC.with_prefix(workflow_dir)
     expected = fc.params()["p_cis"]
 
