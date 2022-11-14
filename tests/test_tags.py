@@ -86,10 +86,10 @@ def test_fix_mod_tags(mm_tag):
     "mm_tag",
     ["MM:Z:C+m?,0,1;", "Mm:Z:C+m?,0,1;"],
 )
-def test_pysam_still_broken(mm_tag):
+def test_pysam_not_broken(mm_tag):
     with pysam_verbosity(0):
         align = make_mock_aligned_segment([mm_tag, "ML:B:C,122,128"])
-        assert align.modified_bases is None
+        assert align.modified_bases == {("C", 0, "m"): [(2, 122), (10, 128)]}
 
 
 def test_sam_flags():

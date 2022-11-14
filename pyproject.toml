@@ -10,11 +10,12 @@ authors = [
   { name = "Eoghan Harrington", email = "eoghan.harrington@nanoporetech.com" },
 ]
 dependencies = [
-    "typer>=0.6.1",
-    "pysam>=0.19.1",
-    "biopython>=1.79",
-    "polars>=0.13.62",
-    "attrs>=22.1.0",
+    "typer~=0.6.1",
+    "pysam>=0.20.0",
+    "biopython~=1.79",
+    "polars~=0.13.62",
+    "attrs~=22.1.0",
+    "pyarrow~=10.0.0",
     "cattrs", # TODO: remove this
     "mappy" # TODO: maybe remove this
 ]
