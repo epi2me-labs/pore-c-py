@@ -83,7 +83,9 @@ def test_process_monomer_alignments(name_sorted_bam, tmp_path):
     prefix = tmp_path / "processed"
     monomer_bam = tmp_path / "processed.ns.bam"
     pe_bam = tmp_path / "processed.pe.bam"
-    writer = process_monomer_alignments(name_sorted_bam, prefix, paired_end=True)
+    writer = process_monomer_alignments(
+        name_sorted_bam, prefix, paired_end=True, chromunity=True
+    )
 
     writer.close()
 
@@ -100,9 +102,16 @@ def test_process_monomer_alignments(name_sorted_bam, tmp_path):
     assert num_aligns == input_aligns
 
     with pysam_verbosity(0):
-        num_aligns = len([a for a in pysam.AlignmentFile(str(pe_bam))])
-    assert num_aligns == sum(writer.pe_writer.counter.values())
+        num_pe_aligns = len([a for a in pysam.AlignmentFile(str(pe_bam))])
+    assert num_pe_aligns == sum(writer.pe_writer.counter.values())
     assert writer.pe_writer.counter["primary"] > 0
+
+    assert writer.pq_writer is not None
+    _df = pl.read_parquet(str(writer.pq_writer.path))
+    assert len(_df) == writer.pq_writer.counter
+    assert len(_df) == sum(
+        [writer.ns_writer.counter[k] for k in ["primary", "secondary", "supplementary"]]
+    )
 
 
 # TODO: this might be redundant

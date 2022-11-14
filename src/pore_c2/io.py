@@ -14,6 +14,8 @@ from typing import (
     Union,
 )
 
+import pyarrow as pa
+import pyarrow.parquet as pq
 from attrs import define, fields
 from pysam import AlignmentFile, AlignmentHeader, FastaFile, FastxFile
 
@@ -88,7 +90,7 @@ class MappingFileCollection(FileCollection):
 class AnnotatedMonomerFC(FileCollection):
     namesorted_bam: Path = Path("{prefix}.ns.bam")
     paired_end_bam: Path = Path("{prefix}.pe.bam")
-    concatemers: Path = Path("{prefix}.concatemers.parquet")
+    chromunity_parquet: Path = Path("{prefix}.chromunity.parquet")
 
 
 def get_concatemer_seqs(paths: List[Path]) -> Iterable[ConcatemerReadSeq]:
@@ -245,10 +247,46 @@ class PairedEndWriter(SamWriter):
                         self.write_record(rec.read_seq)
 
 
+class ChromunityWriter:
+    # TODO: see if chromunity can just parse this from the BAM in the future
+    def __init__(self, path: Path):
+        self.path = path
+        self.schema = pa.schema(
+            [
+                ("cid", pa.string()),
+                ("chrom", pa.string()),
+                ("start", pa.uint32()),
+                ("end", pa.uint32()),
+            ]
+        )
+        self.writer = pq.ParquetWriter(str(self.path), self.schema)
+        self.counter = 0
+
+    def write_records(self, recs: List[MonomerReadSeq]):
+        pylist = [
+            {
+                "cid": r.concatemer_id,
+                "chrom": r.read_seq.align_info.ref_name,
+                "start": r.read_seq.align_info.ref_pos,
+                "end": r.read_seq.align_info.ref_end,
+            }
+            for r in recs
+            if r.read_seq.align_info is not None
+        ]
+        if pylist:
+            batch = pa.RecordBatch.from_pylist(pylist, schema=self.schema)
+            self.writer.write_batch(batch)
+            self.counter += len(pylist)
+
+    def close(self):
+        self.writer.close()
+
+
 @dataclass
 class AnnotatedMonomerWriter(Writer):
     ns_writer: Optional[SamWriter] = None
     pe_writer: Optional[PairedEndWriter] = None
+    pq_writer: Optional[ChromunityWriter] = None
 
     @classmethod
     def from_file_collection(
@@ -262,7 +300,10 @@ class AnnotatedMonomerWriter(Writer):
             if fc.paired_end_bam
             else None
         )
-        return cls(ns_writer=ns_writer, pe_writer=pe_writer)
+        pq_writer = (
+            ChromunityWriter(fc.chromunity_parquet) if fc.chromunity_parquet else None
+        )
+        return cls(ns_writer=ns_writer, pe_writer=pe_writer, pq_writer=pq_writer)
 
     def consume(self, annotated_stream: Iterable[Tuple[str, List[MonomerReadSeq]]]):
         for _, read_seqs in annotated_stream:
@@ -270,12 +311,16 @@ class AnnotatedMonomerWriter(Writer):
                 [self.ns_writer.write_record(_.read_seq) for _ in read_seqs]
             if self.pe_writer:
                 self.pe_writer.write_records(read_seqs)
+            if self.pq_writer:
+                self.pq_writer.write_records(read_seqs)
 
     def close(self):
         if self.ns_writer:
             self.ns_writer.close()
         if self.pe_writer:
             self.pe_writer.close()
+        if self.pq_writer:
+            self.pq_writer.close()
 
 
 def get_monomer_writer(

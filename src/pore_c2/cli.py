@@ -186,12 +186,17 @@ def process_monomer_alignments(
     force: bool = False,
     monomers: bool = True,
     paired_end: bool = False,
+    chromunity: bool = False,
 ):
     logger = get_logger()
     logger.info(f"Processing reads from {bam}")
     input_files = [bam]
     drop_outputs = []
-    for flag, filekey in [(monomers, "namesorted_bam"), (paired_end, "paired_end_bam")]:
+    for flag, filekey in [
+        (monomers, "namesorted_bam"),
+        (paired_end, "paired_end_bam"),
+        (chromunity, "chromunity_parquet"),
+    ]:
         if not flag:
             drop_outputs.append(filekey)
     output_files = AnnotatedMonomerFC.with_prefix(output_prefix, drop=drop_outputs)
