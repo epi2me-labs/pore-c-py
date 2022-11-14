@@ -78,6 +78,7 @@ def simulate_walk(
 def build_monomer(
     segment: WalkSegment,
     ff: FastaFile,
+    read_length: int,
     subread_idx: int,
     subread_total: int,
     concatemer_id: str,
@@ -88,6 +89,7 @@ def build_monomer(
     coords = ConcatemerCoords(
         start=segment.read_start,
         end=segment.read_end,
+        read_length=read_length,
         subread_idx=subread_idx,
         subread_total=subread_total,
     )
@@ -196,10 +198,12 @@ def random_concatemer_generator(
         )
         # actual walk may be shorter than requested
         num_monomers = len(walk.segments)
+        read_length = sum([(_.read_end - _.read_start) for _ in walk.segments])
         monomers = [
             build_monomer(
                 segment,
                 reference_fasta,
+                read_length,
                 monomer_idx,
                 num_monomers,
                 concatemer_id,

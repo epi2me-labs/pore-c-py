@@ -162,6 +162,7 @@ def monomer_read_seqs():
                 coords=ConcatemerCoords(
                     start=start,
                     end=end,
+                    read_length=aligns_per_concatemer * 10,
                     subread_idx=monomer_idx,
                     subread_total=aligns_per_concatemer,
                 ),

@@ -36,9 +36,11 @@ def make_mock_aligned_segment(tags: List[str]):
 
 
 def test_concat_coords_tag():
-    coords = ConcatemerCoords(start=0, end=10, subread_idx=5, subread_total=10)
+    coords = ConcatemerCoords(
+        start=0, end=10, read_length=20, subread_idx=5, subread_total=10
+    )
     tag = coords.to_tag()
-    assert tag == f"{CONCATEMER_TAG}:B:i,0,10,5,10"
+    assert tag == f"{CONCATEMER_TAG}:B:i,0,10,20,5,10"
     coords1 = coords.from_tag(tag)
     assert coords == coords1
 

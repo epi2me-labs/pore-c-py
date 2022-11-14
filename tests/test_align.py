@@ -69,6 +69,7 @@ def _make_mock_monomer_aligns(
     monomers = []
     concatemer_id = "C"
     subread_total = len(set([_[0] for _ in data]))
+    read_length = sum([_[1] - _[0] for _ in data])
     for x, (r_start, r_end, chrom, g_start, flag) in enumerate(data):
         if flag is None:
             flag = SamFlags(unmap=chrom is None)
@@ -78,7 +79,11 @@ def _make_mock_monomer_aligns(
             concatemer_id=concatemer_id,
             monomer_id=monomer_id,
             coords=ConcatemerCoords(
-                start=r_start, end=r_end, subread_idx=x, subread_total=subread_total
+                start=r_start,
+                end=r_end,
+                read_length=read_length,
+                subread_idx=x,
+                subread_total=subread_total,
             ),
             read_seq=ReadSeq(
                 name=monomer_id,

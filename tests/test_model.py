@@ -33,17 +33,19 @@ def test_splits_to_intervals(length, positions, expected):
 
 
 @pytest.mark.parametrize(
-    "idx,total,expected",
+    "start,end,read_length,expected",
     [
-        (0, 1, "concat001:0"),
-        (1, 9, "concat001:1"),
-        (1, 10, "concat001:01"),
-        (0, 100, "concat001:000"),
-        (99, 100, "concat001:099"),
+        (0, 1, 9, "concat001:0:1"),
+        (1, 9, 10, "concat001:01:09"),
+        (1, 10, 10, "concat001:01:10"),
+        # (0, 100, 1000,  "concat001:000"),
+        # (99, 100,10, "concat001:099"),
     ],
 )
-def test_monomer_id(idx, total, expected):
-    coords = ConcatemerCoords(start=0, end=1, subread_idx=idx, subread_total=total)
+def test_monomer_id(start, end, read_length, expected):
+    coords = ConcatemerCoords(
+        start=start, end=end, read_length=read_length, subread_idx=0, subread_total=1
+    )
     res = MonomerReadSeq.generate_id("concat001", coords)
     assert res == expected
 
@@ -57,10 +59,10 @@ def test_flow(concatemer_unaligned: AlignedSegment):
         "read_w_mods",
     ]
     assert monomers[0].coords == ConcatemerCoords(
-        start=0, end=5, subread_idx=0, subread_total=2
+        start=0, end=5, read_length=11, subread_idx=0, subread_total=2
     )
     assert monomers[1].coords == ConcatemerCoords(
-        start=5, end=11, subread_idx=1, subread_total=2
+        start=5, end=11, read_length=11, subread_idx=1, subread_total=2
     )
     monomers[0].read_seq.align_info = AlignInfo(
         ref_name="chr1", ref_pos=0, length=5, flag=0
@@ -94,7 +96,7 @@ def concatemer_unaligned() -> AlignedSegment:
     src = AlignedSegment.from_dict(
         dict(
             name="read_w_mods",
-            seq="AACGTTCGAAC",
+            seq="AACGTTCGAAC",  # lenght 11
             qual="!!00{}22[]]",
             tags=["RG:Z:RG01", "Mm:Z:C+m,0,1;", "Ml:B:C,122,128"],
             ref_name="*",

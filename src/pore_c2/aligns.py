@@ -20,11 +20,12 @@ def group_aligns_by_concatemers(
         if concat_id in seen:
             raise ValueError(
                 f"Concatemer '{concat_id}' has already been seen, "
-                f"these alignments should be sorted by {MOLECULE_TAG} tag"
+                "these alignments should be sorted by read name or "
+                f"{MOLECULE_TAG} tag"
             )
         aligns = list(aligns)
         if sort:
-            aligns = sorted(aligns, key=lambda x: x.coords.subread_idx)
+            aligns = sorted(aligns, key=lambda x: x.coords.start)
         yield (concat_id, aligns)
         seen.add(concat_id)
 

@@ -303,6 +303,8 @@ class ConcatemerCoords:
     # start coordinate on the concatemer
     end: int
     # end coordinate on the concatemer
+    read_length: int
+    # total concatemer length
     subread_idx: int
     # the index of the monomer on the read
     subread_total: int
@@ -313,16 +315,22 @@ class ConcatemerCoords:
         try:
             tag, _, tag_data = tag.split(":", 2)
             _, coords = tag_data.split(",", 1)
-            start, end, subread_idx, subread_total = map(int, coords.split(","))
+            start, end, read_length, subread_idx, subread_total = map(
+                int, coords.split(",")
+            )
         except Exception:
             raise ValueError(f"Error parsing concatmer coords from {tag}")
         return cls(
-            start=start, end=end, subread_idx=subread_idx, subread_total=subread_total
+            start=start,
+            end=end,
+            read_length=read_length,
+            subread_idx=subread_idx,
+            subread_total=subread_total,
         )
 
     def to_tag(self) -> str:
         return (
-            f"{CONCATEMER_TAG}:B:i,{self.start},{self.end},"
+            f"{CONCATEMER_TAG}:B:i,{self.start},{self.end},{self.read_length},"
             f"{self.subread_idx},{self.subread_total}"
         )
 
@@ -351,8 +359,11 @@ class MonomerReadSeq:
         To do this we append zero-padding index of the monomer within
         the concatemer: <read_id>:<zero-padded index of monomer within read>
         """
-        num_digits = len(str(coords.subread_total))
-        return f"{concatemer_id}:{coords.subread_idx:0{num_digits}d}"
+        num_digits = len(str(coords.read_length))
+        return (
+            f"{concatemer_id}:"
+            f"{coords.start:0{num_digits}d}:{coords.end:0{num_digits}d}"
+        )
 
     def _update_tags(self):
         self.read_seq.tags[MOLECULE_TAG] = f"{MOLECULE_TAG}:Z:{self.concatemer_id}"
@@ -459,13 +470,15 @@ class ConcatemerReadSeq:
         return self.split(positions)
 
     def split(self, positions: List[int]) -> List[MonomerReadSeq]:
-        intervals = splits_to_intervals(positions, len(self.read_seq.sequence))
+        read_length = len(self.read_seq.sequence)
+        intervals = splits_to_intervals(positions, read_length)
         num_intervals = len(intervals)
         res = []
         for idx, (start, end) in enumerate(intervals):
             coords = ConcatemerCoords(
                 start=start,
                 end=end,
+                read_length=read_length,
                 subread_idx=idx,
                 subread_total=num_intervals,
             )
