@@ -1,3 +1,28 @@
+## 0.6.0 (2022-11-15)
+
+### Feat
+
+- **io.py**: write basic summary stats in json format
+- **io.py**: write a chromunity-compatible parquet file
+
+### Fix
+
+- **model.py**: use read start,end coords as monomer id
+- **Snakefile**: fix integration tests
+
+## 0.5.1 (2022-10-31)
+
+### Fix
+
+- **aligns.py**: fix bug caused by change in lru_cache signature
+
+### Refactor
+
+- **sam_tags.py**: rename to sam_utils to reflect broader functoin
+- **utils.py**: remove utils.py put functionaliy into io and sam_tags
+- **sam_tags.py**: move sam tag processing to separate module
+- **model.py**: make pore-s-specific tags into global settings
+
 ## 0.5.0 (2022-10-21)
 
 ### Fix
