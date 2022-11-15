@@ -187,6 +187,8 @@ def process_monomer_alignments(
     monomers: bool = True,
     paired_end: bool = False,
     chromunity: bool = False,
+    summary: bool = False,
+    direct_only: bool = False,
 ):
     logger = get_logger()
     logger.info(f"Processing reads from {bam}")
@@ -196,6 +198,7 @@ def process_monomer_alignments(
         (monomers, "namesorted_bam"),
         (paired_end, "paired_end_bam"),
         (chromunity, "chromunity_parquet"),
+        (summary, "summary_json"),
     ]:
         if not flag:
             drop_outputs.append(filekey)
@@ -211,7 +214,10 @@ def process_monomer_alignments(
     with closing(
         AnnotatedMonomerWriter.from_file_collection(output_files, header=header)
     ) as writer:
-        writer.consume(annotated_stream)
+        writer.consume(annotated_stream, direct_only=direct_only)
+
+    if summary:
+        logger.info(f"Summary information at {output_files.summary_json}")
     # logger.info(
     #    f"Wrote {writer.base_counter:,} bases in "
     #    f"{writer.read_counter:,} reads to {output_path}"

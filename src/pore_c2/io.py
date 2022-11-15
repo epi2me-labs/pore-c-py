@@ -1,4 +1,5 @@
-from collections import Counter
+import json
+from collections import Counter, defaultdict
 from dataclasses import dataclass
 from itertools import chain
 from pathlib import Path
@@ -19,7 +20,7 @@ import pyarrow.parquet as pq
 from attrs import define, fields
 from pysam import AlignmentFile, AlignmentHeader, FastaFile, FastxFile
 
-from .aligns import get_pairs
+from .aligns import PairedMonomers, get_pairs
 from .log import get_logger
 from .model import ConcatemerReadSeq, MonomerReadSeq, ReadSeq
 from .sam_utils import SamFlags, downgrade_mm_tag, pysam_verbosity
@@ -90,6 +91,7 @@ class MappingFileCollection(FileCollection):
 class AnnotatedMonomerFC(FileCollection):
     namesorted_bam: Path = Path("{prefix}.ns.bam")
     paired_end_bam: Path = Path("{prefix}.pe.bam")
+    summary_json: Path = Path("{prefix}.summary.json")
     chromunity_parquet: Path = Path("{prefix}.chromunity.parquet")
 
 
@@ -182,69 +184,64 @@ class SamWriter(Writer):
 
 
 class PairedEndWriter(SamWriter):
-    def write_records(self, recs: List[MonomerReadSeq], direct_only: bool = True):
-        if len(recs) == 1:
-            self.write_record(recs[0].read_seq)
-        else:
-            walk = [_ for _ in recs if _.read_seq.flags.qcfail is False]
-            if len(walk) == 1:
-                self.write_record(walk[0].read_seq)
+    def write_records(
+        self, recs=List[PairedMonomers], fail_aligns=Optional[List[MonomerReadSeq]]
+    ):
+        for (left, right, pair_data) in recs:
+            if left is None:  # no valid pairs
+                continue
+            if right is None:  # singleton
+                self.write_record(left.read_seq)
+                continue
+            l_flag, r_flag = pair_data.to_flags(
+                align_flags=(left.read_seq.flags, right.read_seq.flags)
+            )
+            l_sam_kwds, r_sam_kwds = {}, {}
+            if not l_flag.munmap:
+                assert right.read_seq.align_info is not None
+                l_sam_kwds["next_reference_name"] = (
+                    "="
+                    if pair_data.is_cis is True
+                    else right.read_seq.align_info.ref_name
+                )
+                l_sam_kwds["next_reference_start"] = (
+                    right.read_seq.align_info.ref_pos + 1
+                )
+            if not r_flag.munmap:
+                assert left.read_seq.align_info is not None
+                r_sam_kwds["next_reference_name"] = (
+                    "="
+                    if pair_data.is_cis is True
+                    else left.read_seq.align_info.ref_name
+                )
+                r_sam_kwds["next_reference_start"] = (
+                    left.read_seq.align_info.ref_pos + 1
+                )
+            if pair_data.is_cis:
+                template_length = max(
+                    left.read_seq.align_info.ref_end,  # type: ignore
+                    right.read_seq.align_info.ref_end,  # type: ignore
+                ) - min(
+                    left.read_seq.align_info.ref_pos,  # type: ignore
+                    right.read_seq.align_info.ref_pos,  # type: ignore
+                )
             else:
-                for (left, right, pair_data) in get_pairs(
-                    walk, direct_only=direct_only
-                ):
-                    l_flag, r_flag = pair_data.to_flags(
-                        align_flags=(left.read_seq.flags, right.read_seq.flags)
-                    )
-                    l_sam_kwds, r_sam_kwds = {}, {}
-                    if not l_flag.munmap:
-                        assert right.read_seq.align_info is not None
-                        l_sam_kwds["next_reference_name"] = (
-                            "="
-                            if pair_data.is_cis is True
-                            else right.read_seq.align_info.ref_name
-                        )
-                        l_sam_kwds[
-                            "next_reference_start"
-                        ] = right.read_seq.align_info.ref_pos
-                    if not r_flag.munmap:
-                        assert left.read_seq.align_info is not None
-                        r_sam_kwds["next_reference_name"] = (
-                            "="
-                            if pair_data.is_cis is True
-                            else left.read_seq.align_info.ref_name
-                        )
-                        r_sam_kwds[
-                            "next_reference_start"
-                        ] = left.read_seq.align_info.ref_pos
-                    if pair_data.is_cis:
-                        template_length = max(
-                            left.read_seq.align_info.ref_end,  # type: ignore
-                            right.read_seq.align_info.ref_end,  # type: ignore
-                        ) - min(
-                            left.read_seq.align_info.ref_pos,  # type: ignore
-                            right.read_seq.align_info.ref_pos,  # type: ignore
-                        )
-                    else:
-                        template_length = 0
-
-                    self.write_record(
-                        left.read_seq,
-                        flag=l_flag,
-                        template_length=template_length,
-                        **l_sam_kwds,
-                    )
-                    self.write_record(
-                        right.read_seq,
-                        flag=r_flag,
-                        template_length=template_length,
-                        **r_sam_kwds,
-                    )
-            # write any qc fail records
-            if len(walk) != len(recs):
-                for rec in recs:
-                    if rec.read_seq.flags.qcfail:
-                        self.write_record(rec.read_seq)
+                template_length = 0
+            self.write_record(
+                left.read_seq,
+                flag=l_flag,
+                template_length=template_length,
+                **l_sam_kwds,
+            )
+            self.write_record(
+                right.read_seq,
+                flag=r_flag,
+                template_length=template_length,
+                **r_sam_kwds,
+            )
+        if fail_aligns:
+            for rec in fail_aligns:
+                self.write_record(rec.read_seq)
 
 
 class ChromunityWriter:
@@ -282,11 +279,49 @@ class ChromunityWriter:
         self.writer.close()
 
 
+class StatsWriter:
+    def __init__(self, path: Path):
+        self.path = path
+        self.concatemer_count = 0
+        self.cardinality_count = defaultdict(int)
+        self.pair_count = defaultdict(int)
+        self.cis_trans = defaultdict(int)
+
+    def write_records(self, pairs: List[PairedMonomers]):
+        self.concatemer_count += 1
+        for x, (left, right, pair_data) in enumerate(pairs):
+            if x == 0:
+                if left is None:
+                    cardinality = 0
+                elif right is None:
+                    cardinality = 1
+                else:
+                    cardinality = left.coords.subread_total
+                self.cardinality_count[cardinality] += 1
+            if pair_data is not None:
+                self.pair_count[pair_data.align_state.name] += 1
+                if pair_data.align_state.name == "both":
+                    if pair_data.is_cis:
+                        self.cis_trans["cis"] += 1
+                    else:
+                        self.cis_trans["trans"] += 1
+
+    def close(self):
+        d = {
+            "cardinality": {k: v for k, v in self.cardinality_count.items()},
+            "pair_count": {k: v for k, v in self.pair_count.items()},
+            "cis_trans": {k: v for k, v in self.cis_trans.items()},
+        }
+        with self.path.open("w") as fh:
+            fh.write(json.dumps(d))
+
+
 @dataclass
 class AnnotatedMonomerWriter(Writer):
     ns_writer: Optional[SamWriter] = None
     pe_writer: Optional[PairedEndWriter] = None
     pq_writer: Optional[ChromunityWriter] = None
+    stats_writer: Optional[StatsWriter] = None
 
     @classmethod
     def from_file_collection(
@@ -303,14 +338,34 @@ class AnnotatedMonomerWriter(Writer):
         pq_writer = (
             ChromunityWriter(fc.chromunity_parquet) if fc.chromunity_parquet else None
         )
-        return cls(ns_writer=ns_writer, pe_writer=pe_writer, pq_writer=pq_writer)
+        stats_writer = StatsWriter(fc.summary_json) if fc.summary_json else None
+        return cls(
+            ns_writer=ns_writer,
+            pe_writer=pe_writer,
+            pq_writer=pq_writer,
+            stats_writer=stats_writer,
+        )
 
-    def consume(self, annotated_stream: Iterable[Tuple[str, List[MonomerReadSeq]]]):
+    def consume(
+        self,
+        annotated_stream: Iterable[Tuple[str, List[MonomerReadSeq]]],
+        direct_only: bool,
+    ):
         for _, read_seqs in annotated_stream:
             if self.ns_writer:
                 [self.ns_writer.write_record(_.read_seq) for _ in read_seqs]
-            if self.pe_writer:
-                self.pe_writer.write_records(read_seqs)
+            if self.pe_writer or self.stats_writer:
+                pass_aligns = [_ for _ in read_seqs if _.read_seq.flags.qcfail is False]
+                fail_aligns = (
+                    []
+                    if len(pass_aligns) == len(read_seqs)
+                    else [_ for _ in read_seqs if _.read_seq.flags.qcfail is True]
+                )
+                pairs = list(get_pairs(pass_aligns, direct_only=direct_only))
+                if self.pe_writer:
+                    self.pe_writer.write_records(pairs, fail_aligns=fail_aligns)
+                if self.stats_writer:
+                    self.stats_writer.write_records(pairs)
             if self.pq_writer:
                 self.pq_writer.write_records(read_seqs)
 
@@ -321,6 +376,8 @@ class AnnotatedMonomerWriter(Writer):
             self.pe_writer.close()
         if self.pq_writer:
             self.pq_writer.close()
+        if self.stats_writer:
+            self.stats_writer.close()
 
 
 def get_monomer_writer(

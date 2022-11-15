@@ -11,6 +11,10 @@ from .sam_utils import MOLECULE_TAG, WALK_TAG, AlignCategory, SamFlags
 
 logger = get_logger()
 
+PairedMonomers = Tuple[
+    Optional[MonomerReadSeq], Optional[MonomerReadSeq], Optional["PairData"]
+]
+
 
 def group_aligns_by_concatemers(
     aligns: Iterable[MonomerReadSeq], sort: bool = True
@@ -101,14 +105,21 @@ def sort_aligns_by_concatemer_idx(
 
 
 def get_pairs(
-    sorted_aligns: List[MonomerReadSeq], direct_only: bool = False
-) -> Iterable[Tuple[MonomerReadSeq, MonomerReadSeq, "PairData"]]:
-    if direct_only:
-        pairs = zip(sorted_aligns[:-1], sorted_aligns[1:])
+    sorted_aligns: List[MonomerReadSeq],
+    direct_only: bool = False,
+) -> Iterable[PairedMonomers]:
+
+    if len(sorted_aligns) == 0:
+        yield (None, None, None)
+    elif len(sorted_aligns) == 1:
+        yield (sorted_aligns[0], None, None)
     else:
-        pairs = combinations(sorted_aligns, 2)
-    for x, (left, right) in enumerate(pairs):
-        yield (left, right, PairData.from_monomer_pair(left, right, pair_idx=x))
+        if direct_only:
+            pairs = zip(sorted_aligns[:-1], sorted_aligns[1:])
+        else:
+            pairs = combinations(sorted_aligns, 2)
+        for x, (left, right) in enumerate(pairs):
+            yield (left, right, PairData.from_monomer_pair(left, right, pair_idx=x))
 
 
 def set_walk_tag(align: MonomerReadSeq, walk_str: str):

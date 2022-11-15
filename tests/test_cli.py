@@ -1,3 +1,4 @@
+import json
 import shutil
 from collections import Counter
 from pathlib import Path
@@ -84,23 +85,25 @@ def test_process_monomer_alignments(name_sorted_bam, tmp_path):
     monomer_bam = tmp_path / "processed.ns.bam"
     pe_bam = tmp_path / "processed.pe.bam"
     writer = process_monomer_alignments(
-        name_sorted_bam, prefix, paired_end=True, chromunity=True
+        name_sorted_bam,
+        prefix,
+        paired_end=True,
+        chromunity=True,
+        summary=True,
     )
-
     writer.close()
-
-    assert writer.ns_writer is not None
-    assert writer.pe_writer is not None
-    monomer_bam.exists()
 
     with pysam_verbosity(0):
         input_aligns = len([a for a in pysam.AlignmentFile(str(name_sorted_bam))])
 
+    assert writer.ns_writer is not None
+    assert monomer_bam.exists()
     with pysam_verbosity(0):
         num_aligns = len([a for a in pysam.AlignmentFile(str(monomer_bam))])
     assert num_aligns == sum(writer.ns_writer.counter.values())
     assert num_aligns == input_aligns
 
+    assert writer.pe_writer is not None
     with pysam_verbosity(0):
         num_pe_aligns = len([a for a in pysam.AlignmentFile(str(pe_bam))])
     assert num_pe_aligns == sum(writer.pe_writer.counter.values())
@@ -112,6 +115,10 @@ def test_process_monomer_alignments(name_sorted_bam, tmp_path):
     assert len(_df) == sum(
         [writer.ns_writer.counter[k] for k in ["primary", "secondary", "supplementary"]]
     )
+
+    assert writer.stats_writer is not None
+    data = json.loads(writer.stats_writer.path.read_text())
+    assert sum(data["cardinality"].values()) == _df["cid"].n_unique()
 
 
 # TODO: this might be redundant
