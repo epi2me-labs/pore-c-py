@@ -42,7 +42,6 @@ rule generate_test_data:
 
 rule index_genome:
     output:
-        metadata="output/scenario.metadata.json",
         mmi="output/scenario.mmi",
         fai="input/scenario.fasta.fai",
     input:
@@ -50,8 +49,13 @@ rule index_genome:
     params:
         enzyme=config["enzyme"],
         prefix="output/scenario",
+    conda:
+        CONDA_ENV_NAME
     shell:
-        "samtools faidx {input} && minimap2 -x map-ont -d {output.mmi}"
+        """
+        samtools faidx {input}
+        minimap2 -x map-ont -d {output.mmi} {input}
+        """
 
 
 rule split_concatemers_ubam:

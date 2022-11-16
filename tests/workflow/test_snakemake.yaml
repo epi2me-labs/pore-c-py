@@ -3,4 +3,4 @@
   tags:
     - integration
   files:
-    - path: "input/scenario.genome.fasta"
+    - path: "input/scenario.fasta"

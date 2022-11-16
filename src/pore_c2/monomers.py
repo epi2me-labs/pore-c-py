@@ -26,7 +26,7 @@ class SeqComposition:
         return SeqComposition(total, gc, at, other, masked)
 
 
-@dataclass(kw_only=True)
+@dataclass()
 class GenomicFragment:
     chrom: str
     start: int

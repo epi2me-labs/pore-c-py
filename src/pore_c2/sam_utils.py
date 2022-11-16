@@ -124,7 +124,7 @@ class AlignCategory(enum.IntEnum):
     secondary = 3
 
 
-@dataclass(kw_only=True)
+@dataclass()
 class SamFlags:
     paired: bool = False
     proper_pair: bool = False

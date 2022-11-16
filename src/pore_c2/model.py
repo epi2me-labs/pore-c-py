@@ -115,7 +115,7 @@ def get_subread(
     return seq, qual, mm_str, ml_str
 
 
-@dataclass(kw_only=True)
+@dataclass()
 class AlignInfo:
     ref_name: str = "*"
     ref_pos: int = 0
@@ -134,7 +134,7 @@ class AlignInfo:
         return SamFlags.int_to_strand(self.flag)
 
 
-@dataclass(kw_only=True)
+@dataclass()
 class ReadSeq:
     name: str
     sequence: str
@@ -295,7 +295,7 @@ class ReadSeq:
         return sam_str
 
 
-@dataclass(kw_only=True)
+@dataclass()
 class ConcatemerCoords:
     """Relative position of monomer on concatemer"""
 
@@ -335,7 +335,7 @@ class ConcatemerCoords:
         )
 
 
-@dataclass(kw_only=True)
+@dataclass()
 class MonomerReadSeq:
     monomer_id: str
     # unique id for the monomer. Format {read_name}:{read_start}:{read_end}
@@ -434,7 +434,7 @@ def splits_to_intervals(positions: List[int], length: int) -> List[Tuple[int, in
     return [(start, end) for start, end in zip(breaks[:-1], breaks[1:])]
 
 
-@dataclass(kw_only=True)
+@dataclass()
 class ConcatemerReadSeq:
     concatemer_id: str
     read_seq: ReadSeq
