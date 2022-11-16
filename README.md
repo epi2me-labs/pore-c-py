@@ -37,3 +37,8 @@ git rebase -i main
 git checkout main
 git merge <branch-name>
 ```
+
+
+```
+#update lock files
+hatch run lock

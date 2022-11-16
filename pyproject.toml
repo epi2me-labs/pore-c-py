@@ -39,6 +39,7 @@ pairtools = ">=1.0.1"
 cooler = ">0.8.0"
 samtools = "*"
 whatshap = ">=1.6"
+hapcut2 = "~=1.3.3"
 
 
 [tool.commitizen]

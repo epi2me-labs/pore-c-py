@@ -1,4 +1,0 @@
-dependencies:
-  - pip
-  - pip:
-      - "git+https://git.oxfordnanolabs.local/eharrington/pore-c2@0.5.1#egg=pore-c2"

@@ -4,7 +4,8 @@ dependencies = [
     "pytest<8.0.0,>=7.1.2",
     "pytest-xdist<3.0.0,>=2.5.0",
     "pytest-cov>=3.0.0",
-    "conda-lock"
+  #"conda-lock[pip_support]>=1.2.1",
+  #  "poetry==1.1.*"
 ]
 
 [envs.default.scripts]
@@ -22,9 +23,12 @@ make_test_data = """
         --variant-density 0.05 \
         --num-concatemers 1000  \
         --mean-frags-per-concatemer 10 \
-        --p-cis 0.80 \
+        --p-cis 0.80
 """
-lock = "conda-lock -f pyproject.toml --micromamba"
+lock = [
+  "conda-lock -f environment.yml -f conda/dev-environment.yml -p linux-64 --lockfile conda/dev-linux-64.conda-lock.yml",
+  "conda-lock render --filename-template 'conda/dev-linux-64.lock' conda/dev-linux-64.conda-lock.yml"
+]
 
 
 [envs.integration]
@@ -35,8 +39,8 @@ dependencies = [
 
 [envs.integration.scripts]
 test = "pytest -c tests/workflow/pytest.ini  tests/workflow/"
-create_env = "conda create --name porec2_dev --file conda-linux-64.lock"
-update_env = "conda install --name porec2_dev --file conda-linux-64.lock"
+create_env = "conda create --name porec2_dev --file conda/dev-linux-64.conda-lock.yml"
+update_env = "conda install --name porec2_dev --file conda/dev-linux-64.conda-lock.yml"
 
 
 
