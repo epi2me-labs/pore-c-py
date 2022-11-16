@@ -45,15 +45,13 @@ rule index_genome:
         metadata="output/scenario.metadata.json",
         mmi="output/scenario.mmi",
         fai="input/scenario.fasta.fai",
-        fragment_fasta="output/scenario.fragments.fasta",
-        fragment_table="output/scenario.fragments.parquet",
     input:
         genome="input/scenario.fasta",
     params:
         enzyme=config["enzyme"],
         prefix="output/scenario",
     shell:
-        "pore-c2 index {input} {params.enzyme} --prefix {params.prefix}"
+        "samtools faidx {input} && minimap2 -x map-ont -d {output.mmi}"
 
 
 rule split_concatemers_ubam:

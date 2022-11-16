@@ -18,26 +18,10 @@ from pore_c2.sam_utils import pysam_verbosity
 from pore_c2.testing import Scenario
 
 
-@pytest.mark.parametrize("command", ["index", "align", "merge"])
+@pytest.mark.parametrize("command", ["utils process-monomer-alignments"])
 def test_help(runner: CliRunner, command: str):
     result = runner.invoke(app, [command, "--help"])
-    # print(result.stdout)
-    assert result.exit_code == 0
-
-
-def test_index_cli(runner, scenario: Scenario, tmp_path):
-    prefix = Path(tmp_path / "test_digest")
-    result = runner.invoke(
-        app,
-        [
-            "index",
-            str(scenario.reference_fasta),
-            str(scenario.enzyme),
-            "--prefix",
-            str(prefix),
-        ],
-    )
-    assert result.exit_code == 0
+    assert result.exit_code == 2
 
 
 @pytest.mark.parametrize("suffix", [".bam", ".fastq"])
