@@ -2,11 +2,11 @@ import array
 import enum
 import re
 from contextlib import contextmanager
+from dataclasses import asdict, dataclass, fields
 from functools import lru_cache
 from typing import Any, Literal
 
 import pysam
-from attrs import asdict, define, fields_dict
 from pysam import AlignedSegment
 
 TAG_MI_RE = re.compile(r"MI\:Z\:(\S+)")
@@ -124,7 +124,7 @@ class AlignCategory(enum.IntEnum):
     secondary = 3
 
 
-@define(kw_only=True)
+@dataclass(kw_only=True)
 class SamFlags:
     paired: bool = False
     proper_pair: bool = False
@@ -153,8 +153,8 @@ class SamFlags:
     @classmethod
     def from_int(cls, val: int):
         kwds = {}
-        for key, _ in fields_dict(cls).items():  # pyright: ignore
-            kwds[key] = (val & SamEnum[key].value) > 0
+        for f in fields(cls):
+            kwds[f.name] = (val & SamEnum[f.name].value) > 0
         return cls(**kwds)
 
     @property

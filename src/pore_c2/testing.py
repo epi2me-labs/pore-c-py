@@ -12,7 +12,6 @@ from typing import Any, Dict, Iterable, List, Literal, Mapping, Optional, Tuple
 import numpy as np
 import numpy.typing as npt
 import polars as pl
-from attrs import define
 from numpy.random import Generator, default_rng
 from pysam import faidx  # type: ignore
 from pysam import FastaFile, VariantFile, VariantHeader, tabix_compress, tabix_index
@@ -688,7 +687,7 @@ def concatemers_to_dataframe(
     )
 
 
-@define
+@dataclass
 class TestScenarioFileCollection(FileCollection):
     ns_bam: Path = Path("{prefix}.name_sorted.bam")
     reference_fasta: Path = Path("{prefix}.fasta")

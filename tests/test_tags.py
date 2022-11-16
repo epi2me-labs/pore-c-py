@@ -1,7 +1,7 @@
+from dataclasses import fields
 from typing import List
 
 import pytest
-from attrs import fields_dict
 from pysam import AlignedSegment, AlignmentHeader
 
 from pore_c2.model import ConcatemerCoords
@@ -93,7 +93,8 @@ def test_pysam_not_broken(mm_tag):
 
 
 def test_sam_flags():
-    for key, _ in fields_dict(SamFlags).items():  # pyright: ignore
+    for f in fields(SamFlags):
+        key = f.name
         for tf in (True, False):
             flags = SamFlags(**{key: tf})
             assert getattr(flags, key) == tf

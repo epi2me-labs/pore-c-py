@@ -1,8 +1,7 @@
 from abc import ABCMeta, abstractmethod
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any, Dict, List, Literal, Mapping, Optional, Tuple
 
-from attrs import Factory, define
 from Bio.Seq import Seq
 from pysam import AlignedSegment, FastxRecord
 
@@ -116,7 +115,7 @@ def get_subread(
     return seq, qual, mm_str, ml_str
 
 
-@define(kw_only=True)
+@dataclass(kw_only=True)
 class AlignInfo:
     ref_name: str = "*"
     ref_pos: int = 0
@@ -135,16 +134,16 @@ class AlignInfo:
         return SamFlags.int_to_strand(self.flag)
 
 
-@define(kw_only=True)
+@dataclass(kw_only=True)
 class ReadSeq:
     name: str
     sequence: str
-    flags: SamFlags = Factory(lambda: SamFlags(unmap=True))
+    flags: SamFlags = field(default_factory=lambda: SamFlags(unmap=True))
     quality: Optional[str] = None
     mod_bases: Optional[Dict] = None
     align_info: Optional[AlignInfo] = None
     next_align: Optional[Tuple[str, int]] = None
-    tags: Dict[str, str] = Factory(dict)
+    tags: Dict[str, str] = field(default_factory=dict)
 
     @property
     def tag_str(self):
@@ -296,7 +295,7 @@ class ReadSeq:
         return sam_str
 
 
-@define(kw_only=True, frozen=True)
+@dataclass(kw_only=True)
 class ConcatemerCoords:
     """Relative position of monomer on concatemer"""
 
@@ -336,7 +335,7 @@ class ConcatemerCoords:
         )
 
 
-@define(kw_only=True)
+@dataclass(kw_only=True)
 class MonomerReadSeq:
     monomer_id: str
     # unique id for the monomer. Format {read_name}:{read_start}:{read_end}
@@ -435,7 +434,7 @@ def splits_to_intervals(positions: List[int], length: int) -> List[Tuple[int, in
     return [(start, end) for start, end in zip(breaks[:-1], breaks[1:])]
 
 
-@define(kw_only=True)
+@dataclass(kw_only=True)
 class ConcatemerReadSeq:
     concatemer_id: str
     read_seq: ReadSeq

@@ -1,14 +1,14 @@
+from dataclasses import dataclass
 from pathlib import Path
 
 import pytest
-from attrs import define
 from pysam import fqimport  # type: ignore
 
 from pore_c2.io import FileCollection, find_files, iter_reads
 
 
 def test_file_collection(tmp_path):
-    @define
+    @dataclass
     class TestFC(FileCollection):
         a: Path = Path("{prefix}.A.txt")
         b: Path = Path("{prefix}.B.txt")

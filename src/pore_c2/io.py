@@ -1,6 +1,6 @@
 import json
 from collections import Counter, defaultdict
-from dataclasses import dataclass
+from dataclasses import dataclass, fields
 from itertools import chain
 from pathlib import Path
 from typing import (
@@ -17,7 +17,6 @@ from typing import (
 
 import pyarrow as pa
 import pyarrow.parquet as pq
-from attrs import define, fields
 from pysam import AlignmentFile, AlignmentHeader, FastaFile, FastxFile
 
 from .aligns import PairedMonomers, get_pairs
@@ -35,9 +34,9 @@ SAM_EXTS = [".sam", ".bam", ".cram"]
 logger = get_logger()
 
 
-@define
+@dataclass
 class FileCollection:
-    _path_attrs: List[str]
+    # _path_attrs: List[str]
 
     @classmethod
     def with_prefix(cls, prefix: Path, drop: Optional[List[str]] = None):
@@ -52,9 +51,11 @@ class FileCollection:
                 kwds[f.name] = Path(str(f.default).format(prefix=str(prefix)))
             path_attrs.append(f.name)
 
-        return cls(
-            path_attrs=path_attrs, **kwds  # pyright: ignore [reportGeneralTypeIssues]
-        )
+        return cls(**kwds)  # pyright: ignore [reportGeneralTypeIssues]
+
+    @property
+    def _path_attrs(self):
+        return [f.name for f in fields(self) if f.type is Path]
 
     def __iter__(self):
         for a in self._path_attrs:
@@ -78,7 +79,7 @@ class FileCollection:
         return True
 
 
-@define
+@dataclass
 class MappingFileCollection(FileCollection):
     bam: Path = Path("{prefix}.bam")
     temp_bam: Path = Path("{prefix}.temp.bam")
@@ -87,7 +88,7 @@ class MappingFileCollection(FileCollection):
     unmapped: Path = Path("{prefix}.unmapped.fastq")
 
 
-@define
+@dataclass
 class AnnotatedMonomerFC(FileCollection):
     namesorted_bam: Path = Path("{prefix}.ns.bam")
     paired_end_bam: Path = Path("{prefix}.pe.bam")
