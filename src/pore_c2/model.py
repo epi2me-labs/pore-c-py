@@ -12,6 +12,7 @@ from .sam_utils import (
     MOD_TAGS,
     MOLECULE_TAG,
     WALK_SEGMENT_RE,
+    WALK_TAG,
     SamFlags,
     tag_tuple_to_str,
 )
@@ -462,7 +463,7 @@ class ConcatemerReadSeq:
 
     def to_fastq_str(self, walk: Optional["Walk"]):
         if walk:
-            self.read_seq.tags[CONCATEMER_TAG] = walk.to_tag()
+            self.read_seq.tags[WALK_TAG] = walk.to_tag()
         return self.read_seq.to_fastq_str()
 
     def cut(self, cutter: Cutter) -> List[MonomerReadSeq]:
@@ -616,4 +617,4 @@ class Walk:
         return cls(segments)
 
     def to_tag(self) -> str:
-        return f"{CONCATEMER_TAG}:Z:" + ";".join([_.to_string() for _ in self.segments])
+        return f"{WALK_TAG}:Z:" + ";".join([_.to_string() for _ in self.segments])

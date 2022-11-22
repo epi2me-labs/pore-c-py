@@ -12,7 +12,8 @@ from pysam import AlignedSegment
 TAG_MI_RE = re.compile(r"MI\:Z\:(\S+)")
 # XC==concatemer metadata
 TAG_XC_RE = re.compile(
-    r"Xc:B:i,(?P<start>\d+),(?P<end>\d+),(?P<subread_idx>\d+),(?P<subread_total>\d+)"
+    r"Xc:B:i,(?P<start>\d+),(?P<end>\d+),(?P<read_length>\d+),"
+    r"(?P<subread_idx>\d+),(?P<subread_total>\d+)"
 )
 # XW==walk metadata
 TAG_XW_RE = re.compile(r"Xw\:Z\:(.+)")  # TODO fill this out

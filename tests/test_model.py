@@ -260,7 +260,7 @@ def test_walk():
         WalkSegment(30, 40),
     ]
     w = Walk(segments)
-    tag = f"{CONCATEMER_TAG}:Z:*:0-5;chr1:+:10-15:5-10;chr2:-:30-50:10-30;*:30-40"
+    tag = f"{WALK_TAG}:Z:*:0-5;chr1:+:10-15:5-10;chr2:-:30-50:10-30;*:30-40"
     assert w.to_tag() == tag
     w1 = Walk.from_tag(tag)
     assert w1 == w
