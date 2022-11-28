@@ -1,5 +1,6 @@
 from abc import ABCMeta, abstractmethod
 from dataclasses import dataclass, field
+from functools import cached_property
 from typing import Any, Dict, List, Literal, Mapping, Optional, Tuple
 
 from Bio.Seq import Seq
@@ -132,6 +133,10 @@ class AlignInfo:
     @property
     def strand(self) -> Literal["+", "-", "."]:
         return SamFlags.int_to_strand(self.flag)
+
+    @cached_property
+    def sam_flags(self) -> SamFlags:
+        return SamFlags.from_int(self.flag)
 
 
 @dataclass()

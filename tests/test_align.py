@@ -10,6 +10,8 @@ from pore_c2.aligns import (
     annotate_monomer_alignments,
     calculate_genomic_distance,
     get_pairs,
+    group_colinear,
+    is_colinear,
 )
 from pore_c2.model import AlignInfo, ConcatemerCoords, MonomerReadSeq, ReadSeq
 from pore_c2.sam_utils import SamFlags
@@ -264,3 +266,66 @@ def test_read_pair_to_sam():
 
     # print(pair_data)
     # raise ValueError(pair_data)
+
+
+def _align_from_tuple(t) -> AlignInfo:
+    return AlignInfo(
+        ref_name=t[0],
+        ref_pos=t[1],
+        length=t[2] - t[1],
+        flag=SamFlags(reverse=t[3] == "-", unmap=len(t) > 4 and t[4] is False).to_int(),
+    )
+
+
+@pytest.mark.parametrize(
+    "left,right,tol,expected",
+    [
+        (("chr1", 0, 10, "+"), ("chr1", 0, 20, "+"), 0, True),  # overlapping
+        (("chr1", 0, 10, "+"), ("chr1", 0, 20, "-"), 0, False),
+        (("chr1", 0, 10, "-"), ("chr1", 0, 20, "-"), 0, True),
+        (("chr1", 0, 10, "+"), ("chr2", 0, 20, "+"), 0, False),
+        (
+            ("chr1", 0, 10, "+"),
+            ("chr1", 10, 20, "+"),
+            1,  # need tol=1 for bookended features
+            True,
+        ),
+        (
+            ("chr1", 0, 10, "+"),
+            ("chr1", 5, 20, "+"),
+            5,  # allow some wiggle
+            True,
+        ),
+        (
+            ("chr1", 0, 10, "+"),
+            ("chr1", 0, 0, ".", False),
+            0,
+            False,
+        ),  # unaligned not colinear
+    ],
+)
+def test_is_colinear(left, right, tol, expected):
+    res = is_colinear(
+        _align_from_tuple(left),
+        _align_from_tuple(right),
+        tol=tol,
+    )
+    assert res == expected
+
+
+@pytest.mark.parametrize(
+    "aligns,expected",
+    [
+        [
+            [("chr1", 0, 10, "+"), ("chr1", 9, 20, "+"), ("chr2", 0, 10, "+")],
+            [[0, 1], [2]],
+        ],
+        [
+            [("chr1", 0, 10, "+"), ("chr1", 9, 20, "+", False), ("chr1", 20, 30, "+")],
+            [[0], [1], [2]],
+        ],
+    ],
+)
+def test_group_colinear(aligns, expected):
+    res = group_colinear([_align_from_tuple(t) for t in aligns])
+    assert res == expected

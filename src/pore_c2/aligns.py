@@ -16,6 +16,49 @@ PairedMonomers = Tuple[
 ]
 
 
+def is_colinear(align1: Optional[AlignInfo], align2: Optional[AlignInfo], tol: int = 1):
+    """Check if two alignments are co-linear in the genome"""
+    # if either is is unmapped then they can't be co-linear
+    if (
+        align1 is None
+        or align2 is None
+        or align1.sam_flags.unmap
+        or align2.sam_flags.unmap
+    ):
+        return False
+    if align1.ref_name != align2.ref_name:
+        return False
+    if align1.strand != align2.strand:
+        return False
+    delta = min(align1.ref_end, align2.ref_end) - max(align1.ref_pos, align2.ref_pos)
+    # overlaps
+    if delta > 0:
+        return True
+    # doesn't overlap
+    if delta < tol:
+        return True
+    return False
+
+
+def group_colinear(aligns: List[AlignInfo], tol: int = 1) -> List[List[int]]:
+    """Group alignments into co-linear blocks"""
+    if len(aligns) < 2:
+        return [list(range(len(aligns)))]
+    res = []
+    block = []
+    for x, a in enumerate(aligns):
+        if x == 0:
+            block = [x]
+        elif is_colinear(aligns[block[-1]], a, tol=tol):
+            block.append(x)
+        else:
+            res.append(block)
+            block = [x]
+    if block:
+        res.append(block)
+    return res
+
+
 def group_aligns_by_concatemers(
     aligns: Iterable[MonomerReadSeq], sort: bool = True
 ) -> Iterable[Tuple[str, List[MonomerReadSeq]]]:
