@@ -155,13 +155,17 @@ class ReadSeq:
         return "\t".join(map(str, self.tags.values()))
 
     @classmethod
-    def from_fastq(cls, rec: FastxRecord):
+    def from_fastq(cls, rec: FastxRecord, remove_tags: Optional[List[str]] = None):
         if rec.comment:
             tags = {
                 item.split(":", 1)[0]: item
                 for item in rec.comment.split()
                 if FASTQ_TAG_RE.match(item.strip())
             }
+            if remove_tags is not None:
+                for t in remove_tags:
+                    if t in tags:
+                        tags.pop(t)
         else:
             tags = {}
         return ReadSeq(
@@ -186,9 +190,12 @@ class ReadSeq:
         rec: AlignedSegment,
         as_unaligned: bool = False,
         init_mod_bases: bool = False,
+        remove_tags: Optional[List[str]] = None,
     ):
         tags = {}
         for (tag, tag_data, tag_type) in rec.get_tags(with_value_type=True):
+            if remove_tags and tag in remove_tags:
+                continue
             tags[tag] = tag_tuple_to_str(tag, tag_data, tag_type)
         if as_unaligned or rec.is_unmapped:
             align_info = None
@@ -396,8 +403,8 @@ class MonomerReadSeq:
         )
 
     @classmethod
-    def from_fastq(cls, rec: FastxRecord):
-        return cls.from_readseq(ReadSeq.from_fastq(rec))
+    def from_fastq(cls, rec: FastxRecord, remove_tags: Optional[List[str]] = None):
+        return cls.from_readseq(ReadSeq.from_fastq(rec, remove_tags=remove_tags))
 
     @classmethod
     def from_align(
@@ -405,10 +412,14 @@ class MonomerReadSeq:
         rec: AlignedSegment,
         as_unaligned: bool = False,
         init_mod_bases: bool = False,
+        remove_tags: Optional[List[str]] = None,
     ):
         return cls.from_readseq(
             ReadSeq.from_align(
-                rec, as_unaligned=as_unaligned, init_mod_bases=init_mod_bases
+                rec,
+                as_unaligned=as_unaligned,
+                init_mod_bases=init_mod_bases,
+                remove_tags=remove_tags,
             )
         )
 
@@ -449,8 +460,8 @@ class ConcatemerReadSeq:
         return cls(concatemer_id=rec.name, read_seq=rec)
 
     @classmethod
-    def from_fastq(cls, rec: FastxRecord):
-        read_seq = ReadSeq.from_fastq(rec)
+    def from_fastq(cls, rec: FastxRecord, remove_tags: Optional[List[str]] = None):
+        read_seq = ReadSeq.from_fastq(rec, remove_tags=remove_tags)
         return cls.from_readseq(read_seq)
 
     @classmethod
@@ -459,9 +470,13 @@ class ConcatemerReadSeq:
         rec: AlignedSegment,
         as_unaligned: bool = False,
         init_mod_bases: bool = False,
+        remove_tags: Optional[List[str]] = None,
     ):
         read_seq = ReadSeq.from_align(
-            rec, as_unaligned=as_unaligned, init_mod_bases=init_mod_bases
+            rec,
+            as_unaligned=as_unaligned,
+            init_mod_bases=init_mod_bases,
+            remove_tags=remove_tags,
         )
         return cls.from_readseq(read_seq)
 

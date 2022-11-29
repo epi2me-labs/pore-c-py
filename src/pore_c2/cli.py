@@ -1,7 +1,7 @@
 from contextlib import closing
 from itertools import islice
 from pathlib import Path
-from typing import Optional
+from typing import List, Optional
 
 import typer
 
@@ -41,24 +41,25 @@ def merge():
     raise NotImplementedError
 
 
-utils = typer.Typer()
-
-
-@utils.command()
-def digest_concatemers(
+@app.command()
+def digest(
     file_or_root: Path,
     enzyme: str,
     output_path: Path,
     glob: str = "*.fastq",
     recursive: bool = True,
     max_reads: int = 0,
+    remove_tags: Optional[List[str]] = typer.Option(
+        None, help="Optionally remove SAM tags from input"
+    ),
 ):
 
     logger = get_logger()
     logger.info("Digesting concatemers")
     input_files = list(find_files(file_or_root, glob=glob, recursive=recursive))
     header = get_alignment_header(source_files=input_files)
-    read_stream = get_concatemer_seqs(input_files)
+    remove_tags = list(set(remove_tags)) if remove_tags else None
+    read_stream = get_concatemer_seqs(input_files, remove_tags=remove_tags)
     if max_reads:
         read_stream = islice(read_stream, max_reads)
     cutter = EnzymeCutter.from_name(enzyme)
@@ -73,6 +74,9 @@ def digest_concatemers(
     #    f"{writer.read_counter:,} reads to {output_path}"
     # )
     return writer
+
+
+utils = typer.Typer()
 
 
 @utils.command()

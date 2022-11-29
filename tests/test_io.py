@@ -80,3 +80,20 @@ def test_ubam_reader(mock_fastq, mock_reads):
     fqimport("-o", str(ubam), "-T", "*", str(mock_fastq))
     reads = list(iter_reads(ubam))
     assert len(reads) == len(written)
+
+
+def test_remove_tags(mock_fastq, mock_reads):
+    initial_tags = [
+        set(v.tags.keys()) for k, v in mock_reads.items() if k != "read_no_qual"
+    ]
+    assert initial_tags == [set(), {"RG", "Ml", "Mm"}, {"RG"}]
+
+    fastq_tags = [
+        set(v.tags.keys()) for v in iter_reads(mock_fastq, remove_tags=["Ml", "Mm"])
+    ]
+    assert fastq_tags == [set(), {"RG"}, {"RG"}]
+
+    ubam = mock_fastq.with_suffix(".bam")
+    fqimport("-o", str(ubam), "-T", "*", str(mock_fastq))
+    bam_tags = [set(v.tags.keys()) for v in iter_reads(ubam, remove_tags=["Ml", "Mm"])]
+    assert bam_tags == [set(), {"RG"}, {"RG"}]

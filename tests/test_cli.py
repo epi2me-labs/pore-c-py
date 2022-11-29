@@ -8,12 +8,7 @@ import pysam
 import pytest
 from typer.testing import CliRunner
 
-from pore_c2.cli import (
-    app,
-    create_test_data,
-    digest_concatemers,
-    process_monomer_alignments,
-)
+from pore_c2.cli import app, create_test_data, digest, process_monomer_alignments
 from pore_c2.sam_utils import pysam_verbosity
 from pore_c2.testing import Scenario
 
@@ -27,10 +22,11 @@ def test_help(runner: CliRunner, command: str):
 @pytest.mark.parametrize("suffix", [".bam", ".fastq"])
 def test_digest_concatemers(default_scenario: Scenario, tmp_path, suffix):
     output_file = tmp_path / f"read_fragments{suffix}"
-    digest_concatemers(
+    digest(
         default_scenario.concatemer_fastq,
         default_scenario.enzyme,
         output_file,
+        remove_tags=None,
     )
     expected = default_scenario.concatemer_metadata.select(
         ["concatemer_id", "num_monomers"]
@@ -111,8 +107,7 @@ def test_digest_cli(runner, scenario: Scenario, tmp_path):
     result = runner.invoke(
         app,
         [
-            "utils",
-            "digest-concatemers",
+            "digest",
             str(scenario.concatemer_fastq),
             str(scenario.enzyme),
             str(output_fastq),

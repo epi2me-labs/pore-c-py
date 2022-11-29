@@ -96,9 +96,13 @@ class AnnotatedMonomerFC(FileCollection):
     chromunity_parquet: Path = Path("{prefix}.chromunity.parquet")
 
 
-def get_concatemer_seqs(paths: List[Path]) -> Iterable[ConcatemerReadSeq]:
+def get_concatemer_seqs(
+    paths: List[Path], remove_tags: Optional[List[str]] = None
+) -> Iterable[ConcatemerReadSeq]:
     for p in paths:
-        for read_seq in iter_reads(p, primary_only=True, as_unaligned=True):
+        for read_seq in iter_reads(
+            p, primary_only=True, as_unaligned=True, remove_tags=remove_tags
+        ):
             yield ConcatemerReadSeq.from_readseq(read_seq)
 
 
@@ -424,21 +428,23 @@ def iter_reads(
     reader_kwds: Optional[Mapping] = None,
     primary_only: bool = False,
     as_unaligned: bool = False,
+    remove_tags: Optional[List[str]] = None,
 ) -> Iterable[ReadSeq]:
     format, reader = get_raw_reader(src, reader_kwds=reader_kwds)
     if format == "sam":
         for rec in reader:
-
             if primary_only and (
                 rec.is_supplementary or rec.is_secondary  # type: ignore
             ):
                 continue
             if DOWNGRADE_MM:
                 rec = downgrade_mm_tag(rec)  # type: ignore
-            yield ReadSeq.from_align(rec, as_unaligned=as_unaligned)  # type: ignore
+            yield ReadSeq.from_align(
+                rec, as_unaligned=as_unaligned, remove_tags=remove_tags  # type: ignore
+            )
     else:
         for rec in reader:
-            yield ReadSeq.from_fastq(rec)
+            yield ReadSeq.from_fastq(rec, remove_tags=remove_tags)
 
 
 def find_files(
