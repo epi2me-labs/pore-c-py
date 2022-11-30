@@ -19,7 +19,7 @@ import pyarrow as pa
 import pyarrow.parquet as pq
 from pysam import AlignmentFile, AlignmentHeader, FastaFile, FastxFile
 
-from .aligns import PairedMonomers, get_pairs
+from .aligns import PairedMonomers, get_pairs, group_colinear
 from .log import get_logger
 from .model import ConcatemerReadSeq, MonomerReadSeq, ReadSeq
 from .sam_utils import SamFlags, downgrade_mm_tag, pysam_verbosity
@@ -251,7 +251,7 @@ class PairedEndWriter(SamWriter):
 
 class ChromunityWriter:
     # TODO: see if chromunity can just parse this from the BAM in the future
-    def __init__(self, path: Path):
+    def __init__(self, path: Path, merge_distance: Optional[int] = None):
         self.path = path
         self.schema = pa.schema(
             [
@@ -259,22 +259,66 @@ class ChromunityWriter:
                 ("chrom", pa.string()),
                 ("start", pa.uint32()),
                 ("end", pa.uint32()),
+                ("num_fragments", pa.uint32()),
             ]
         )
         self.writer = pq.ParquetWriter(str(self.path), self.schema)
         self.counter = 0
+        self.merge_distance = merge_distance
 
     def write_records(self, recs: List[MonomerReadSeq]):
-        pylist = [
-            {
-                "cid": r.concatemer_id,
-                "chrom": r.read_seq.align_info.ref_name,
-                "start": r.read_seq.align_info.ref_pos,
-                "end": r.read_seq.align_info.ref_end,
-            }
-            for r in recs
-            if r.read_seq.align_info is not None
-        ]
+        if self.merge_distance is None:
+            pylist = [
+                {
+                    "cid": r.concatemer_id,
+                    "chrom": r.read_seq.align_info.ref_name,
+                    "start": r.read_seq.align_info.ref_pos,
+                    "end": r.read_seq.align_info.ref_end,
+                    "num_fragments": 1,
+                }
+                for r in recs
+                if r.read_seq.align_info is not None
+            ]
+        else:
+            pylist = []
+            align_blocks = group_colinear(
+                [r.read_seq.align_info for r in recs], tol=self.merge_distance
+            )
+            for a in align_blocks:
+                if len(a) == 1:
+                    r = recs[a[0]]
+                    if r.read_seq.align_info is not None:
+                        pylist.append(
+                            {
+                                "cid": r.concatemer_id,
+                                "chrom": r.read_seq.align_info.ref_name,
+                                "start": r.read_seq.align_info.ref_pos,
+                                "end": r.read_seq.align_info.ref_end,
+                                "num_fragments": 1,
+                            }
+                        )
+                else:
+                    for x, idx in enumerate(a):
+                        r = recs[idx]
+                        # multi-alignment blocks should all be alignments
+                        assert r.read_seq.align_info is not None
+                        if x == 0:
+                            cid = r.concatemer_id
+                            chrom = r.read_seq.align_info.ref_name
+                            start = r.read_seq.align_info.ref_pos
+                            end = r.read_seq.align_info.ref_end
+                        else:
+                            start = min(start, r.read_seq.align_info.ref_pos)
+                            end = max(end, r.read_seq.align_info.ref_end)
+                    pylist.append(
+                        {
+                            "cid": cid,
+                            "chrom": chrom,
+                            "start": start,
+                            "end": end,
+                            "num_fragments": len(a),
+                        }
+                    )
         if pylist:
             batch = pa.RecordBatch.from_pylist(pylist, schema=self.schema)
             self.writer.write_batch(batch)
@@ -330,7 +374,10 @@ class AnnotatedMonomerWriter(Writer):
 
     @classmethod
     def from_file_collection(
-        cls, fc: AnnotatedMonomerFC, header: AlignmentHeader = DEFAULT_ALIGN_HEADER
+        cls,
+        fc: AnnotatedMonomerFC,
+        header: AlignmentHeader = DEFAULT_ALIGN_HEADER,
+        chromunity_merge_distance: Optional[int] = None,
     ):
         ns_writer = (
             SamWriter(fc.namesorted_bam, header=header) if fc.namesorted_bam else None
@@ -341,7 +388,11 @@ class AnnotatedMonomerWriter(Writer):
             else None
         )
         pq_writer = (
-            ChromunityWriter(fc.chromunity_parquet) if fc.chromunity_parquet else None
+            ChromunityWriter(
+                fc.chromunity_parquet, merge_distance=chromunity_merge_distance
+            )
+            if fc.chromunity_parquet
+            else None
         )
         stats_writer = StatsWriter(fc.summary_json) if fc.summary_json else None
         return cls(

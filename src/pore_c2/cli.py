@@ -86,6 +86,7 @@ def parse_bam(
     chromunity: bool = False,
     summary: bool = False,
     direct_only: bool = False,
+    chromunity_merge_distance: Optional[int] = None,
 ):
     logger = get_logger()
     logger.info(f"Processing reads from {bam}")
@@ -109,7 +110,11 @@ def parse_bam(
     monomer_aligns = get_monomer_aligns(input_files)
     annotated_stream = annotate_monomer_alignments(monomer_aligns)
     with closing(
-        AnnotatedMonomerWriter.from_file_collection(output_files, header=header)
+        AnnotatedMonomerWriter.from_file_collection(
+            output_files,
+            header=header,
+            chromunity_merge_distance=chromunity_merge_distance,
+        )
     ) as writer:
         writer.consume(annotated_stream, direct_only=direct_only)
 

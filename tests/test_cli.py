@@ -70,6 +70,7 @@ def test_process_monomer_alignments(name_sorted_bam, tmp_path):
         paired_end=True,
         chromunity=True,
         summary=True,
+        chromunity_merge_distance=10,
     )
     writer.close()
 
@@ -91,10 +92,12 @@ def test_process_monomer_alignments(name_sorted_bam, tmp_path):
 
     assert writer.pq_writer is not None
     _df = pl.read_parquet(str(writer.pq_writer.path))
-    assert len(_df) == writer.pq_writer.counter
-    assert len(_df) == sum(
+    expected_fragments = sum(
         [writer.ns_writer.counter[k] for k in ["primary", "secondary", "supplementary"]]
     )
+    assert len(_df) == writer.pq_writer.counter
+    assert len(_df) <= expected_fragments
+    assert _df["num_fragments"].sum() == expected_fragments
 
     assert writer.stats_writer is not None
     data = json.loads(writer.stats_writer.path.read_text())
