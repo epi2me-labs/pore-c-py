@@ -368,8 +368,8 @@ class MonomerReadSeq:
 
         It's useful to have a monomer id that when lexographically sorted
         recapitulates the order of the monomers within the original read.
-        To do this we append zero-padding index of the monomer within
-        the concatemer: <read_id>:<zero-padded index of monomer within read>
+        To do this we append zero-padded interval of the monomer within
+        the concatemer: <read_id>:<zero-padded start>:<zero-padded end>
         """
         num_digits = len(str(coords.read_length))
         return (

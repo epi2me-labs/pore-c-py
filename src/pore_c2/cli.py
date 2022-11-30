@@ -76,6 +76,52 @@ def digest(
     return writer
 
 
+@app.command()
+def parse_bam(
+    bam: Path,
+    output_prefix: Path,
+    force: bool = False,
+    monomers: bool = True,
+    paired_end: bool = False,
+    chromunity: bool = False,
+    summary: bool = False,
+    direct_only: bool = False,
+):
+    logger = get_logger()
+    logger.info(f"Processing reads from {bam}")
+    input_files = [bam]
+    drop_outputs = []
+    for flag, filekey in [
+        (monomers, "namesorted_bam"),
+        (paired_end, "paired_end_bam"),
+        (chromunity, "chromunity_parquet"),
+        (summary, "summary_json"),
+    ]:
+        if not flag:
+            drop_outputs.append(filekey)
+    output_files = AnnotatedMonomerFC.with_prefix(output_prefix, drop=drop_outputs)
+    if output_files.exists_any() and not force:
+        logger.error(
+            "Some of the outputs already exist, please remove before continuing"
+        )
+        raise IOError
+    header = get_alignment_header(source_files=input_files)
+    monomer_aligns = get_monomer_aligns(input_files)
+    annotated_stream = annotate_monomer_alignments(monomer_aligns)
+    with closing(
+        AnnotatedMonomerWriter.from_file_collection(output_files, header=header)
+    ) as writer:
+        writer.consume(annotated_stream, direct_only=direct_only)
+
+    if summary:
+        logger.info(f"Summary information at {output_files.summary_json}")
+    # logger.info(
+    #    f"Wrote {writer.base_counter:,} bases in "
+    #    f"{writer.read_counter:,} reads to {output_path}"
+    # )
+    return writer
+
+
 utils = typer.Typer()
 
 
@@ -124,52 +170,6 @@ def create_test_data(
         for file_id, path in scenario.fc.truth_files():
             logger.info(f"Truth data {file_id}: {path}")
     return scenario
-
-
-@utils.command()
-def process_monomer_alignments(
-    bam: Path,
-    output_prefix: Path,
-    force: bool = False,
-    monomers: bool = True,
-    paired_end: bool = False,
-    chromunity: bool = False,
-    summary: bool = False,
-    direct_only: bool = False,
-):
-    logger = get_logger()
-    logger.info(f"Processing reads from {bam}")
-    input_files = [bam]
-    drop_outputs = []
-    for flag, filekey in [
-        (monomers, "namesorted_bam"),
-        (paired_end, "paired_end_bam"),
-        (chromunity, "chromunity_parquet"),
-        (summary, "summary_json"),
-    ]:
-        if not flag:
-            drop_outputs.append(filekey)
-    output_files = AnnotatedMonomerFC.with_prefix(output_prefix, drop=drop_outputs)
-    if output_files.exists_any() and not force:
-        logger.error(
-            "Some of the outputs already exist, please remove before continuing"
-        )
-        raise IOError
-    header = get_alignment_header(source_files=input_files)
-    monomer_aligns = get_monomer_aligns(input_files)
-    annotated_stream = annotate_monomer_alignments(monomer_aligns)
-    with closing(
-        AnnotatedMonomerWriter.from_file_collection(output_files, header=header)
-    ) as writer:
-        writer.consume(annotated_stream, direct_only=direct_only)
-
-    if summary:
-        logger.info(f"Summary information at {output_files.summary_json}")
-    # logger.info(
-    #    f"Wrote {writer.base_counter:,} bases in "
-    #    f"{writer.read_counter:,} reads to {output_path}"
-    # )
-    return writer
 
 
 app.add_typer(utils, name="utils")

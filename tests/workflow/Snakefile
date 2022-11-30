@@ -66,7 +66,7 @@ rule split_concatemers_ubam:
     params:
         enzyme=config["enzyme"],
     shell:
-        "pore-c2 utils digest-concatemers {input} {params.enzyme} {output}"
+        "pore-c2 digest {input} {params.enzyme} {output}"
 
 
 rule map_monomers:
@@ -93,7 +93,7 @@ rule process_monomer_alignments:
     params:
         prefix="output/scenario.processed",
     shell:
-        "pore-c2 utils process-monomer-alignments {input} {params.prefix}"
+        "pore-c2 parse-bam {input} {params.prefix}"
 
 
 rule pairtools_parse:

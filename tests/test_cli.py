@@ -8,7 +8,7 @@ import pysam
 import pytest
 from typer.testing import CliRunner
 
-from pore_c2.cli import app, create_test_data, digest, process_monomer_alignments
+from pore_c2.cli import app, create_test_data, digest, parse_bam
 from pore_c2.sam_utils import pysam_verbosity
 from pore_c2.testing import Scenario
 
@@ -64,7 +64,7 @@ def test_process_monomer_alignments(name_sorted_bam, tmp_path):
     prefix = tmp_path / "processed"
     monomer_bam = tmp_path / "processed.ns.bam"
     pe_bam = tmp_path / "processed.pe.bam"
-    writer = process_monomer_alignments(
+    writer = parse_bam(
         name_sorted_bam,
         prefix,
         paired_end=True,
