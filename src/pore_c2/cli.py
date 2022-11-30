@@ -87,6 +87,8 @@ def parse_bam(
     summary: bool = False,
     direct_only: bool = False,
     chromunity_merge_distance: Optional[int] = None,
+    paired_end_minimum_distance: Optional[int] = None,
+    paired_end_maximum_distance: Optional[int] = None,
 ):
     logger = get_logger()
     logger.info(f"Processing reads from {bam}")
@@ -114,6 +116,8 @@ def parse_bam(
             output_files,
             header=header,
             chromunity_merge_distance=chromunity_merge_distance,
+            paired_end_minimum_distance=paired_end_minimum_distance,
+            paired_end_maximum_distance=paired_end_maximum_distance,
         )
     ) as writer:
         writer.consume(annotated_stream, direct_only=direct_only)

@@ -71,6 +71,7 @@ def test_process_monomer_alignments(name_sorted_bam, tmp_path):
         chromunity=True,
         summary=True,
         chromunity_merge_distance=10,
+        paired_end_minimum_distance=100,
     )
     writer.close()
 

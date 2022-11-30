@@ -189,6 +189,21 @@ class SamWriter(Writer):
 
 
 class PairedEndWriter(SamWriter):
+    def __init__(
+        self,
+        *args,
+        min_distance: Optional[int] = None,
+        max_distance: Optional[int] = None,
+        keep_unpaired: bool = False,
+        **kwds,
+    ):
+        self.min_distance = min_distance if min_distance is not None else -1
+        self.max_distance = max_distance if max_distance is not None else float("inf")
+        self.keep_unpaired = keep_unpaired
+        self._filter_cis = (min_distance is not None) | (max_distance is not None)
+
+        super().__init__(*args, **kwds)
+
     def write_records(
         self, recs=List[PairedMonomers], fail_aligns=Optional[List[MonomerReadSeq]]
     ):
@@ -196,8 +211,17 @@ class PairedEndWriter(SamWriter):
             if left is None:  # no valid pairs
                 continue
             if right is None:  # singleton
-                self.write_record(left.read_seq)
+                if self.keep_unpaired:
+                    self.write_record(left.read_seq)
                 continue
+            if self._filter_cis:
+                if not pair_data.is_cis:
+                    continue
+                if not (
+                    self.min_distance <= pair_data.genome_distance <= self.max_distance
+                ):
+                    continue
+
             l_flag, r_flag = pair_data.to_flags(
                 align_flags=(left.read_seq.flags, right.read_seq.flags)
             )
@@ -378,12 +402,19 @@ class AnnotatedMonomerWriter(Writer):
         fc: AnnotatedMonomerFC,
         header: AlignmentHeader = DEFAULT_ALIGN_HEADER,
         chromunity_merge_distance: Optional[int] = None,
+        paired_end_minimum_distance: Optional[int] = None,
+        paired_end_maximum_distance: Optional[int] = None,
     ):
         ns_writer = (
             SamWriter(fc.namesorted_bam, header=header) if fc.namesorted_bam else None
         )
         pe_writer = (
-            PairedEndWriter(fc.paired_end_bam, header=header)
+            PairedEndWriter(
+                fc.paired_end_bam,
+                header=header,
+                min_distance=paired_end_minimum_distance,
+                max_distance=paired_end_maximum_distance,
+            )
             if fc.paired_end_bam
             else None
         )
