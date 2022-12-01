@@ -32,31 +32,61 @@ def main(quiet: bool = False, logfile: Optional[Path] = None):
 
 
 @app.command()
-def align():
-    raise NotImplementedError
-
-
-@app.command()
-def merge():
-    raise NotImplementedError
-
-
-@app.command()
 def digest(
-    file_or_root: Path,
-    enzyme: str,
-    output_path: Path,
-    glob: str = "*.fastq",
-    recursive: bool = True,
-    max_reads: int = 0,
+    input: Path = typer.Argument(
+        ..., help="An unaligned BAM file or FASTQ file or a directory of same"
+    ),
+    enzyme: str = typer.Argument(..., help="A restriction enzyme name eg. NlaIII"),
+    output_bam: Path = typer.Argument(
+        ..., help="An unaligned BAM file with a separate record for each monomer"
+    ),
+    glob: str = typer.Option(
+        default="*.fastq",
+        help="If INPUT is a directory use this glob to search for files",
+    ),
+    recursive: bool = typer.Option(
+        default=True,
+        help="If INPUT is a directory search recusively for files matching 'glob'",
+    ),
+    max_reads: int = typer.Option(
+        default=0, help="Take the first n reads (useful for testing)"
+    ),
     remove_tags: Optional[List[str]] = typer.Option(
         None, help="Optionally remove SAM tags from input"
     ),
 ):
+    """
+    Digest concatemer sequences into monomers using a restriction enzyme.
 
+    The resulting BAM file has a record for each of the monomer subreads. The
+    BAM file has the following properties:
+
+    1. Read ID format: <original_read_id>:<subread_start>:<subread_end>
+
+        The subread start and end are left-padded with zeros so that \
+        when lexographically sorted the monomers are in the same order as \
+        they originally appeared in the concatemer.
+
+    2. Molecule Identifier:
+
+        The MI SAM tag is set to the originial read/concatemer id.
+
+    3. Concatemer Coordinates (Xc):
+
+        The Xc tag contains the relative coordinates of the monomer on the
+        concatemer. Xc:B:i,start,end,concatemer_length,subread_idx,subread_total
+
+    4. Modified bases (MM/ML):
+
+        If modified base tags are found in the input then they will processed
+        so that each subread has the correct ML/MM tags. Note that the 'mv' SAM
+        tag is not handled in the same way and should be removed using the
+        --remove-tags option if present.
+
+    """
     logger = get_logger()
     logger.info("Digesting concatemers")
-    input_files = list(find_files(file_or_root, glob=glob, recursive=recursive))
+    input_files = list(find_files(input, glob=glob, recursive=recursive))
     header = get_alignment_header(source_files=input_files)
     remove_tags = list(set(remove_tags)) if remove_tags else None
     read_stream = get_concatemer_seqs(input_files, remove_tags=remove_tags)
@@ -67,7 +97,7 @@ def digest(
         monomer.read_seq for read in read_stream for monomer in read.cut(cutter)
     )
 
-    with closing(get_monomer_writer(output_path, header=header)) as writer:
+    with closing(get_monomer_writer(output_bam, header=header)) as writer:
         writer.consume(monomer_stream)
     # logger.info(
     #    f"Wrote {writer.base_counter:,} bases in "

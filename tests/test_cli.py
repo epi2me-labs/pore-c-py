@@ -27,6 +27,7 @@ def test_digest_concatemers(default_scenario: Scenario, tmp_path, suffix):
         default_scenario.enzyme,
         output_file,
         remove_tags=None,
+        max_reads=0,
     )
     expected = default_scenario.concatemer_metadata.select(
         ["concatemer_id", "num_monomers"]
