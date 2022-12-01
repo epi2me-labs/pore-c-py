@@ -1,4 +1,5 @@
 import json
+import sys
 from collections import Counter, defaultdict
 from dataclasses import dataclass, fields
 from itertools import chain
@@ -23,7 +24,7 @@ from .aligns import PairedMonomers, get_pairs, group_colinear
 from .log import get_logger
 from .model import ConcatemerReadSeq, MonomerReadSeq, ReadSeq
 from .sam_utils import SamFlags, downgrade_mm_tag, pysam_verbosity
-from .settings import DEFAULT_ALIGN_HEADER, DOWNGRADE_MM
+from .settings import DEFAULT_ALIGN_HEADER, DOWNGRADE_MM, EXE_NAME, VERSION
 
 T = TypeVar("T", ReadSeq, ConcatemerReadSeq, MonomerReadSeq)
 
@@ -542,18 +543,21 @@ def find_files(
 
 
 def get_alignment_header(
-    *, source_files: Optional[List[Path]] = None, reference_fasta: Optional[Path] = None
+    *,
+    source_files: Optional[List[Path]] = None,
+    reference_fasta: Optional[Path] = None,
+    add_pg: bool = True,
 ) -> AlignmentHeader:
     # TODO: add tests for this
     data = {}
     if source_files:
         bams = [f for f in source_files if f.suffix in SAM_EXTS]
-        if len(bams) == 1:
+        if len(bams) >= 1:
             with pysam_verbosity(0):
                 source_header = AlignmentFile(str(bams[0]), check_sq=False).header
             data = {**data, **source_header.to_dict()}
-        elif len(bams) > 1:
-            raise NotImplementedError(f"Too many bams {bams}")
+            if len(bams) > 1:
+                logger.warning(f"BAM header derived from first BAM only: {bams[0]}")
         else:
             pass
     if reference_fasta:
@@ -561,10 +565,25 @@ def get_alignment_header(
         header = AlignmentHeader.from_references(list(ff.references), list(ff.lengths))
         data = {**data, **header.to_dict()}
 
+    if add_pg:
+        _pg = data.pop("PG", [])
+        pg_data = {
+            "ID": f"{EXE_NAME}-{len(_pg) + 1}",
+            "PN": EXE_NAME,
+            "VN": VERSION,
+            "CL": " ".join(sys.argv),
+        }
+        if len(_pg) > 0:
+            if "ID" in _pg[-1]:
+                pg_data["PP"] = _pg[-1]["ID"]
+        _pg.append(pg_data)
+        data["PG"] = _pg
+
     if not data:
         header = DEFAULT_ALIGN_HEADER
     else:
         header = AlignmentHeader.from_dict(data)
+
     return header
 
 
