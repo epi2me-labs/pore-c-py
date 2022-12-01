@@ -1,3 +1,26 @@
+## 0.7.0 (2022-12-01)
+
+### Feat
+
+- **bam**: add PG tag to bam files produced
+- **export**: add separate export subcommand
+- **paired-end-export**: enable filtering paired end read export to cis only and distance bounds
+- **chromunity**: add option to merge fragments colinear in the read and genome into a single 'monomer'
+- **cli.py**: add option to remove SAM tags from input, rename and move subcommands
+- **digest**: move digest to top-level command, add option to remove sam tags from output
+- **aligns.py**: add functions to group alignments colinear in the genome
+
+### Fix
+
+- **model.py**: fix mixed up sam tags
+
+### Refactor
+
+- remove kw_only from dataclass (requires python 3.10 or higher)
+- **overlaps.py**: remove fragment overlap code
+- **dataclasses**: replace attrs uses with dataclasses
+- **mappy**: remove genome index and mappy uses
+
 ## 0.6.0 (2022-11-15)
 
 ### Feat
