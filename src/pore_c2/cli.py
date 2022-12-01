@@ -5,7 +5,7 @@ from typing import List, Optional
 
 import typer
 
-from .aligns import annotate_monomer_alignments
+from .aligns import annotate_monomer_alignments, group_aligns_by_concatemers
 from .io import (
     AnnotatedMonomerFC,
     AnnotatedMonomerWriter,
@@ -132,6 +132,73 @@ def parse_bam(
 
 
 utils = typer.Typer()
+
+
+@utils.command()
+def export_bam(
+    bam: Path,
+    output_prefix: Path,
+    force: bool = False,
+    monomers: bool = False,
+    paired_end: bool = False,
+    chromunity: bool = False,
+    summary: bool = False,
+    direct_only: bool = False,
+    chromunity_merge_distance: Optional[int] = None,
+    paired_end_minimum_distance: Optional[int] = None,
+    paired_end_maximum_distance: Optional[int] = None,
+):
+    logger = get_logger()
+    logger.info(f"Processing reads from {bam}")
+    input_files = [bam]
+    drop_outputs = []
+    at_least_one = False
+    for flag, filekey in [
+        (monomers, "namesorted_bam"),
+        (paired_end, "paired_end_bam"),
+        (chromunity, "chromunity_parquet"),
+        (summary, "summary_json"),
+    ]:
+        if not flag:
+            drop_outputs.append(filekey)
+        else:
+            at_least_one = True
+
+    if not at_least_one:
+        logger.error(
+            "You need to supply at least one of the "
+            "--paired_end, --chromunity or --summary flags"
+        )
+        raise typer.Exit(code=1)
+    output_files = AnnotatedMonomerFC.with_prefix(output_prefix, drop=drop_outputs)
+    if not ("namesorted_bam" in drop_outputs):
+        logger.warning(
+            f"The output file {output_files.namesorted_bam} "
+            "will have the same content as input"
+        )
+
+    if output_files.exists_any() and not force:
+        logger.error(
+            "Some of the outputs already exist, please remove before continuing"
+        )
+        raise IOError
+    header = get_alignment_header(source_files=input_files)
+    annotated_stream = group_aligns_by_concatemers(get_monomer_aligns([bam]))
+    with closing(
+        AnnotatedMonomerWriter.from_file_collection(
+            output_files,
+            header=header,
+            chromunity_merge_distance=chromunity_merge_distance,
+            paired_end_minimum_distance=paired_end_minimum_distance,
+            paired_end_maximum_distance=paired_end_maximum_distance,
+        )
+    ) as writer:
+        writer.consume(annotated_stream, direct_only=direct_only)
+
+    if summary:
+        logger.info(f"Summary information at {output_files.summary_json}")
+
+    return writer
 
 
 @utils.command()

@@ -8,7 +8,7 @@ import pysam
 import pytest
 from typer.testing import CliRunner
 
-from pore_c2.cli import app, create_test_data, digest, parse_bam
+from pore_c2.cli import app, create_test_data, digest, export_bam, parse_bam
 from pore_c2.sam_utils import pysam_verbosity
 from pore_c2.testing import Scenario
 
@@ -118,3 +118,73 @@ def test_digest_cli(runner, scenario: Scenario, tmp_path):
         ],
     )
     assert result.exit_code == 0
+
+
+@pytest.fixture
+def processed_bam(name_sorted_bam, tmp_path):
+    prefix = tmp_path / "processed"
+    monomer_bam = tmp_path / "processed.ns.bam"
+    writer = parse_bam(
+        name_sorted_bam,
+        prefix,
+    )
+    writer.close()
+    return monomer_bam
+
+
+@pytest.mark.skipif(shutil.which("minimap2") is None, reason="minimap2 is not in path")
+def test_export_paired_end(processed_bam, tmp_path):
+    counts = {}
+    for setting, params in [
+        ("default", {}),
+        (
+            "no_trans",
+            {"paired_end_minimum_distance": 0},
+        ),  # setting the minimum distance to 0 gets rid of trans contacts
+        ("no_short", {"paired_end_minimum_distance": 100}),
+        (
+            "no_short_or_long",
+            {"paired_end_minimum_distance": 100, "paired_end_maximum_distance": 500},
+        ),
+        ("direct_only", {"direct_only": True}),
+    ]:
+        writer = export_bam(
+            processed_bam, tmp_path / setting, paired_end=True, **params
+        )
+        with pysam_verbosity(0):
+            counts[setting] = len(
+                [a for a in pysam.AlignmentFile(str(writer.pe_writer.path))]
+            )
+
+    # sanity check that increasing levels of filters leads to fewer reads in the
+    # results
+    assert counts["no_trans"] < counts["default"]
+    assert counts["no_short"] < counts["no_trans"]
+    assert counts["no_short_or_long"] <= counts["no_short"]
+    assert counts["direct_only"] < counts["default"]
+
+
+@pytest.mark.skipif(shutil.which("minimap2") is None, reason="minimap2 is not in path")
+def test_export_chromunity(processed_bam, tmp_path):
+    counts = {}
+    fragments = {}
+    for setting, params in [
+        ("default", {}),
+        ("direct_only", {"direct_only": True}),
+        ("merge_bookend", {"chromunity_merge_distance": 0}),
+        ("merge_long", {"chromunity_merge_distance": 1000}),
+    ]:
+        writer = export_bam(
+            processed_bam, tmp_path / setting, chromunity=True, **params
+        )
+        assert writer.pq_writer is not None
+        _df = pl.read_parquet(str(writer.pq_writer.path))
+        counts[setting] = len(_df)
+        fragments[setting] = _df["num_fragments"].sum()
+
+    # chromunity based on indirect
+    assert counts["direct_only"] == counts["default"]
+    assert counts["merge_bookend"] < counts["default"]
+    assert counts["merge_long"] < counts["merge_bookend"]
+    _frags = list(fragments.values())
+    assert all([f == _frags[0] for f in _frags])
