@@ -1,8 +1,9 @@
 import json
 import sys
+import time
 from collections import Counter, defaultdict
 from dataclasses import dataclass, fields
-from itertools import chain
+from itertools import chain, islice
 from pathlib import Path
 from typing import (
     Dict,
@@ -592,3 +593,47 @@ def fastq_to_ubam(source_fastqs: List[Path], output_ubam: Path) -> Path:
     src = [iter_reads(s) for s in source_fastqs]
     writer.consume(chain(*src))
     return output_ubam
+
+
+# taken from recipe at https://docs.python.org/3/library/itertools.html
+def batched(iterable, n):
+    "Batch data into lists of length n. The last batch may be shorter."
+    # batched('ABCDEFG', 3) --> ABC DEF G
+    if n < 1:
+        raise ValueError("n must be at least one")
+    it = iter(iterable)
+    while batch := list(islice(it, n)):
+        yield batch
+
+
+def create_chunked_bam(
+    input_files: List[Path],
+    output_prefix: Path,
+    chunk_size: int,
+    max_reads: Optional[int] = None,
+) -> List[Tuple[Path, int]]:
+    header = get_alignment_header(source_files=input_files)
+    output = []
+    with pysam_verbosity(0):
+        read_stream = chain(
+            *(AlignmentFile(str(_), check_sq=False) for _ in input_files)
+        )
+        if max_reads:
+            read_stream = islice(read_stream, max_reads)
+
+        for batch_idx, reads in enumerate(batched(read_stream, chunk_size)):
+            outfile = output_prefix.with_suffix(f".batch_{batch_idx}.bam")
+            counter = 0
+            start = time.perf_counter()
+            with AlignmentFile(str(outfile), mode="wb", header=header) as writer:
+                for read in reads:
+                    writer.write(read)
+                    counter += 1
+            elapsed = time.perf_counter() - start
+            reads_per_minute = int(counter * 60 / elapsed)
+            logger.info(
+                f"Wrote batch {batch_idx}: {counter} reads "
+                f"[{reads_per_minute:,d} reads/min]"
+            )
+            output.append((outfile, counter))
+    return output

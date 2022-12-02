@@ -9,6 +9,7 @@ from .aligns import annotate_monomer_alignments, group_aligns_by_concatemers
 from .io import (
     AnnotatedMonomerFC,
     AnnotatedMonomerWriter,
+    create_chunked_bam,
     find_files,
     get_alignment_header,
     get_concatemer_seqs,
@@ -313,6 +314,42 @@ def create_test_data(
         for file_id, path in scenario.fc.truth_files():
             logger.info(f"Truth data {file_id}: {path}")
     return scenario
+
+
+@utils.command()
+def create_chunked_ubam(
+    input: Path = typer.Argument(
+        ..., help="An unaligned BAM file or directory of same"
+    ),
+    output_prefix: Path = typer.Argument(
+        ..., help="An unaligned BAM file with a separate record for each monomer"
+    ),
+    chunk_size: int = typer.Argument(..., help="The number of reads in each chunk"),
+    glob: str = typer.Option(
+        default="*.bam",
+        help="If INPUT is a directory use this glob to search for files",
+    ),
+    recursive: bool = typer.Option(
+        default=True,
+        help="If INPUT is a directory search recusively for files matching 'glob'",
+    ),
+    max_reads: int = typer.Option(
+        default=0, help="Take the first n reads (useful for testing)"
+    ),
+):
+    logger = get_logger()
+    input_files = list(find_files(input, glob=glob, recursive=recursive))
+    if len(input_files) == 0:
+        logger.error("No input files found at {input}")
+        raise typer.Exit(code=1)
+
+    if output_prefix.is_dir():
+        output_prefix = output_prefix / "chunked"
+    output_files = create_chunked_bam(
+        input_files, output_prefix, chunk_size, max_reads=max_reads
+    )
+    logger.info(f"Wrote {len(output_files)} chunks")
+    return output_files
 
 
 app.add_typer(utils, name="utils")

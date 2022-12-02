@@ -8,7 +8,14 @@ import pysam
 import pytest
 from typer.testing import CliRunner
 
-from pore_c2.cli import app, create_test_data, digest, export_bam, parse_bam
+from pore_c2.cli import (
+    app,
+    create_chunked_ubam,
+    create_test_data,
+    digest,
+    export_bam,
+    parse_bam,
+)
 from pore_c2.sam_utils import pysam_verbosity
 from pore_c2.testing import Scenario
 
@@ -197,3 +204,19 @@ def test_export_chromunity(processed_bam, tmp_path):
     assert counts["merge_long"] < counts["merge_bookend"]
     _frags = list(fragments.values())
     assert all([f == _frags[0] for f in _frags])
+
+
+def test_create_chunked_bam(default_scenario: Scenario, tmp_path):
+    output_prefix = tmp_path / "chunked"
+    res = create_chunked_ubam(
+        default_scenario.concatemer_ubam.parent,
+        output_prefix,
+        chunk_size=10,
+        glob="*.bam",
+        max_reads=0,
+    )
+
+    for path, expected in res:
+        with pysam_verbosity(0):
+            observed = len([a for a in pysam.AlignmentFile(str(path), check_sq=False)])
+        assert observed == expected
