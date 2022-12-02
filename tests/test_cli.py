@@ -209,10 +209,9 @@ def test_export_chromunity(processed_bam, tmp_path):
 def test_create_chunked_bam(default_scenario: Scenario, tmp_path):
     output_prefix = tmp_path / "chunked"
     res = create_chunked_ubam(
-        default_scenario.concatemer_ubam.parent,
+        default_scenario.concatemer_ubam,
         output_prefix,
         chunk_size=10,
-        glob="*.bam",
         max_reads=0,
     )
 
