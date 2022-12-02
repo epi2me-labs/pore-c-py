@@ -73,6 +73,7 @@ def test_process_monomer_alignments(name_sorted_bam, tmp_path):
         summary=True,
         chromunity_merge_distance=10,
         paired_end_minimum_distance=100,
+        paired_end_maximum_distance=None,
     )
     writer.close()
 
@@ -128,6 +129,9 @@ def processed_bam(name_sorted_bam, tmp_path):
     writer = parse_bam(
         name_sorted_bam,
         prefix,
+        paired_end_minimum_distance=None,
+        paired_end_maximum_distance=None,
+        chromunity_merge_distance=None,
     )
     writer.close()
     return monomer_bam
@@ -136,6 +140,11 @@ def processed_bam(name_sorted_bam, tmp_path):
 @pytest.mark.skipif(shutil.which("minimap2") is None, reason="minimap2 is not in path")
 def test_export_paired_end(processed_bam, tmp_path):
     counts = {}
+    defaults = dict(
+        paired_end_maximum_distance=None,
+        paired_end_minimum_distance=None,
+    )
+
     for setting, params in [
         ("default", {}),
         (
@@ -149,9 +158,8 @@ def test_export_paired_end(processed_bam, tmp_path):
         ),
         ("direct_only", {"direct_only": True}),
     ]:
-        writer = export_bam(
-            processed_bam, tmp_path / setting, paired_end=True, **params
-        )
+        kwds = {**defaults, **params}
+        writer = export_bam(processed_bam, tmp_path / setting, paired_end=True, **kwds)
         with pysam_verbosity(0):
             counts[setting] = len(
                 [a for a in pysam.AlignmentFile(str(writer.pe_writer.path))]

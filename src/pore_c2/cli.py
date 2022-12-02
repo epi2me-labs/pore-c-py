@@ -108,18 +108,55 @@ def digest(
 
 @app.command()
 def parse_bam(
-    bam: Path,
-    output_prefix: Path,
-    force: bool = False,
-    monomers: bool = True,
-    paired_end: bool = False,
-    chromunity: bool = False,
+    bam: Path = typer.Argument(
+        ..., help="A namesorted BAM of aligned + unaligned monomers"
+    ),
+    output_prefix: Path = typer.Argument(
+        ..., help="Output files will share this prefix"
+    ),
+    force: bool = typer.Option(default=False, help="Overwite any existing files"),
+    monomers: bool = typer.Option(
+        default=True, help="Create a namesorted BAM file with pore-c annotations"
+    ),
+    chromunity: bool = typer.Option(
+        default=False, help="Create a chromunity-compatible parquet"
+    ),
+    chromunity_merge_distance: Optional[int] = typer.Option(
+        default=None,
+        help=(
+            "Merge co-linear monomers that are separated by less than this distance "
+            "into a single monomer"
+        ),
+    ),
     summary: bool = False,
-    direct_only: bool = False,
-    chromunity_merge_distance: Optional[int] = None,
-    paired_end_minimum_distance: Optional[int] = None,
-    paired_end_maximum_distance: Optional[int] = None,
+    direct_only: bool = typer.Option(
+        default=False,
+        help=(
+            "Only output monomer pairs that are adjacent on the concatemer"
+            ", don't do combinatorial expansion"
+        ),
+    ),
+    paired_end: bool = typer.Option(default=False, help="Create a mock paired-end BAM"),
+    paired_end_minimum_distance: Optional[int] = typer.Option(
+        None,
+        help=(
+            "Filter out any pairs shorter than this distance."
+            "Note setting this removes all trans pairs"
+        ),
+    ),
+    paired_end_maximum_distance: Optional[int] = typer.Option(
+        None,
+        help=(
+            "Filter out any pairs longer than this distance. "
+            "Note setting this removes all trans pairs"
+        ),
+    ),
 ):
+    """
+    Parse a BAM file of aligned monomers.
+
+    """
+    # TODO: fill out documentation
     logger = get_logger()
     logger.info(f"Processing reads from {bam}")
     input_files = [bam]
