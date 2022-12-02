@@ -1,3 +1,9 @@
+## 0.7.1 (2022-12-02)
+
+### Feat
+
+- **create-chunked-ubam**: break an unaligned bam into chunks
+
 ## 0.7.0 (2022-12-01)
 
 ### Feat
