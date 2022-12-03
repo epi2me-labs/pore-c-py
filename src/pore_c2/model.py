@@ -189,7 +189,7 @@ class ReadSeq:
         cls,
         rec: AlignedSegment,
         as_unaligned: bool = False,
-        init_mod_bases: bool = False,
+        init_mod_bases: bool = True,
         remove_tags: Optional[List[str]] = None,
     ):
         tags = {}
@@ -257,7 +257,7 @@ class ReadSeq:
         if strip_tags:
             tags = ""
         else:
-            tags = self.tag_str
+            tags = self.tag_str.strip()
 
         is_unmapped = as_unaligned or self.align_info is None
 
