@@ -1,3 +1,9 @@
+## 0.7.2 (2022-12-05)
+
+### Fix
+
+- **digest**: don't strip mod base tags by default
+
 ## 0.7.1 (2022-12-02)
 
 ### Feat
