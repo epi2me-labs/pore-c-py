@@ -1,6 +1,0 @@
-- name: full
-  command: snakemake --cores 1  --use-conda --snakefile Snakefile full
-  tags:
-    - integration
-  files:
-    - path: "input/scenario.fasta"
