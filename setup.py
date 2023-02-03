@@ -7,9 +7,11 @@ import re
 from setuptools import setup, find_packages
 import sys
 
-__pkg_name__ = 'pore_c_py'
+__pkg_name__ = 'pore-c-py'
 __author__ = 'epi2melabs'
-__description__ = 'Analyse Pore-c data.'
+__description__ = 'Analyse Pore-C data.'
+
+__pkg_import__ = __pkg_name__.replace("-", "_")
 
 # Use readme as long description and say its github-flavour markdown
 from os import path
@@ -20,16 +22,16 @@ with open(path.join(this_directory, 'README.md'), **kwargs) as f:
 __long_description_content_type__ = 'text/markdown'
 
 __path__ = os.path.dirname(__file__)
-__pkg_path__ = os.path.join(os.path.join(__path__, __pkg_name__))
+__pkg_path__ = os.path.join(os.path.join(__path__, __pkg_import__))
 
 # Get the version number from __init__.py
-verstrline = open(os.path.join(__pkg_name__, '__init__.py'), 'r').read()
+verstrline = open(os.path.join(__pkg_import__, '__init__.py'), 'r').read()
 vsre = r"^__version__ = ['\"]([^'\"]*)['\"]"
 mo = re.search(vsre, verstrline, re.M)
 if mo:
     __version__ = mo.group(1)
 else:
-    raise RuntimeError('Unable to find version string in "{}/__init__.py".'.format(__pkg_name__))
+    raise RuntimeError('Unable to find version string in "{}/__init__.py".'.format(__pkg_import__))
 
 dir_path = os.path.dirname(__file__)
 with open(os.path.join(dir_path, 'requirements.txt')) as fh:
@@ -54,5 +56,7 @@ setup(
     zip_safe=False,
     install_requires=install_requires,
     packages=find_packages(exclude=("tests",)),
-    entry_points={"console_scripts": ["pore_c_py = pore_c_py.main:run_main"]},
+    entry_points={
+        "console_scripts": [
+            f"{__pkg_name__} = {__pkg_import__}.main:run_main"]},
 )
