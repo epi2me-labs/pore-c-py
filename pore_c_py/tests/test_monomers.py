@@ -1,8 +1,8 @@
 """Test monomers."""
 import pytest
 
-from porecpy.model import EnzymeCutter
-from porecpy.testing import simulate_sequence_with_cut_sites
+from pore_c_py.model import EnzymeCutter
+from pore_c_py.testing import simulate_sequence_with_cut_sites
 
 
 @pytest.mark.parametrize("enzyme_id", ["EcoRI", "HindIII", "AloI"])

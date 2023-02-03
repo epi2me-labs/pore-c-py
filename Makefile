@@ -3,7 +3,7 @@
 PYTHON ?= python3
 
 IN_VENV=. ./venv/bin/activate
-PROJECT=porecpy
+PROJECT=pore_c_py
 
 venv/bin/activate:
 	test -d venv || $(PYTHON) -m venv venv
@@ -20,7 +20,7 @@ test: venv/bin/activate
 		--statistics
 	# demo should run without error
 	${IN_VENV} && python setup.py install
-	${IN_VENV} && pytest porecpy/tests
+	${IN_VENV} && pytest pore_c_py/tests
 
 IN_BUILD=. ./pypi_build/bin/activate
 pypi_build/bin/activate:

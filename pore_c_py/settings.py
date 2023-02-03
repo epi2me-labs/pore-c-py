@@ -1,7 +1,7 @@
 """Settings."""
 from pysam import AlignmentHeader
 
-from porecpy import __version__
+from pore_c_py import __version__
 
 
 DEFAULT_ALIGN_HEADER = AlignmentHeader.from_dict({"CO": [""]})

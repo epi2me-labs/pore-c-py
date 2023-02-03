@@ -27,16 +27,16 @@ requirements:
 
 test:
   imports:
-    - porecpy
+    - pore_c_py
 
 about:
-  home: "https://github.com/epi2me-labs/porecpy"
+  home: "https://github.com/epi2me-labs/pore_c_py"
   license: Mozilla Public License 2.0 
   license_family: OTHER
   license_file: LICENSE.md
   summary: "eCharts plotting API"
-  doc_url: https://github.com/epi2me-labs/porecpy
-  dev_url: https://github.com/epi2me-labs/porecpy
+  doc_url: https://github.com/epi2me-labs/pore_c_py
+  dev_url: https://github.com/epi2me-labs/pore_c_py
 
 extra:
   recipe-maintainers:

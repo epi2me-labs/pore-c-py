@@ -5,7 +5,7 @@ from pathlib import Path
 from pysam import fqimport
 import pytest
 
-from porecpy.io import FileCollection, find_files, iter_reads
+from pore_c_py.io import FileCollection, find_files, iter_reads
 
 
 def test_file_collection(tmp_path):

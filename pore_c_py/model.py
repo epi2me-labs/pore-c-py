@@ -7,7 +7,7 @@ from typing import Any, Dict, List, Literal, Mapping, Optional, Tuple
 from Bio.Seq import Seq
 from pysam import AlignedSegment, FastxRecord
 
-from porecpy.sam_utils import (
+from pore_c_py.sam_utils import (
     CONCATEMER_TAG,
     FASTQ_TAG_RE,
     MOD_TAGS,
@@ -17,7 +17,7 @@ from porecpy.sam_utils import (
     WALK_SEGMENT_RE,
     WALK_TAG
 )
-from porecpy.settings import DEFAULT_ALIGN_HEADER
+from pore_c_py.settings import DEFAULT_ALIGN_HEADER
 
 
 class Cutter(metaclass=ABCMeta):

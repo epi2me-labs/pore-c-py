@@ -5,7 +5,7 @@ from typing import Any, Dict, Iterable, List, Optional, TextIO
 
 import polars as pl
 
-from porecpy.model import Cutter
+from pore_c_py.model import Cutter
 
 
 @dataclass

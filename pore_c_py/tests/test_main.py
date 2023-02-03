@@ -9,7 +9,7 @@ import pysam
 import pytest
 from typer.testing import CliRunner
 
-from porecpy.main import (
+from pore_c_py.main import (
     app,
     create_chunked_ubam,
     create_test_data,
@@ -17,8 +17,8 @@ from porecpy.main import (
     export_bam,
     parse_bam,
 )
-from porecpy.sam_utils import pysam_verbosity
-from porecpy.testing import Scenario
+from pore_c_py.sam_utils import pysam_verbosity
+from pore_c_py.testing import Scenario
 
 
 @pytest.mark.parametrize("command", ["utils process-monomer-alignments"])

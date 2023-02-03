@@ -20,9 +20,9 @@ from pysam import (
     tabix_index, VariantFile, VariantHeader
 )
 
-from porecpy.io import fastq_to_ubam, FileCollection
-from porecpy.log import get_logger
-from porecpy.model import (
+from pore_c_py.io import fastq_to_ubam, FileCollection
+from pore_c_py.log import get_logger
+from pore_c_py.model import (
     AlignInfo,
     ConcatemerCoords,
     ConcatemerReadSeq,
@@ -32,8 +32,8 @@ from porecpy.model import (
     Walk,
     WalkSegment,
 )
-from porecpy.monomers import GenomicFragment
-from porecpy.sam_utils import MOLECULE_TAG
+from pore_c_py.monomers import GenomicFragment
+from pore_c_py.sam_utils import MOLECULE_TAG
 
 logger = get_logger()
 

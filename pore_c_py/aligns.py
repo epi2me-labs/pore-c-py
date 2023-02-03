@@ -6,9 +6,9 @@ from functools import lru_cache
 from itertools import combinations, groupby
 from typing import Iterable, List, Literal, Optional, Tuple
 
-from porecpy.log import get_logger
-from porecpy.model import AlignInfo, MonomerReadSeq, Walk
-from porecpy.sam_utils import AlignCategory, MOLECULE_TAG, SamFlags, WALK_TAG
+from pore_c_py.log import get_logger
+from pore_c_py.model import AlignInfo, MonomerReadSeq, Walk
+from pore_c_py.sam_utils import AlignCategory, MOLECULE_TAG, SamFlags, WALK_TAG
 
 logger = get_logger()
 
