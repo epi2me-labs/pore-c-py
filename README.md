@@ -6,11 +6,11 @@ Use `--help` with to find detailed usage instructions.
 ## Installation
 Via pip:
 ```
-pip install pore_c_py
+pip install pore-c-py
 ```
 Or via conda:
 ```
-conda install -c epi2me-labs pore_c_py
+conda install -c epi2me-labs pore-c-py
 ```
 
 ## Usage

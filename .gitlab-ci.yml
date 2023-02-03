@@ -33,7 +33,6 @@ test:
     artifacts:
         paths:
             - dist/*.tar.gz
-            - ezcharts_demo_report.html
 
 deploy-checks:
     stage: prerelease
