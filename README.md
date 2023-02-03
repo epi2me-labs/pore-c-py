@@ -1,4 +1,4 @@
-# Porecpy
+# Pore_c_py
 This package provides python scripts for working with Pore-c data
 
 Use `--help` with to find detailed usage instructions.
@@ -17,7 +17,7 @@ conda install -c epi2me-labs pore_c_py
 
 ```
 $ pore_c_py --help
-usage: porecpy [OPTIONS] COMMAND [ARGS].
+usage: pore_c_py [OPTIONS] COMMAND [ARGS].
 
 Available subcommands are:
     digest       Digest concatemer sequences into monomers using a restriction enzyme.      
