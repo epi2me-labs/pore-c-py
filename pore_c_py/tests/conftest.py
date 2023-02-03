@@ -6,9 +6,14 @@ from typing import Dict
 import pytest
 from typer.testing import CliRunner
 
-from porecpy.model import AlignInfo, ConcatemerCoords, MonomerReadSeq, ReadSeq
-from porecpy.sam_utils import MOLECULE_TAG
-from porecpy.testing import Scenario
+from pore_c_py.model import (
+    AlignInfo,
+    ConcatemerCoords,
+    MonomerReadSeq,
+    ReadSeq
+)
+from pore_c_py.sam_utils import MOLECULE_TAG
+from pore_c_py.testing import Scenario
 
 
 @pytest.fixture

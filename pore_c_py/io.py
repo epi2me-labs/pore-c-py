@@ -22,11 +22,11 @@ import pyarrow as pa
 import pyarrow.parquet as pq
 from pysam import AlignmentFile, AlignmentHeader, FastaFile, FastxFile
 
-from porecpy.aligns import get_pairs, group_colinear, PairedMonomers
-from porecpy.log import get_logger
-from porecpy.model import ConcatemerReadSeq, MonomerReadSeq, ReadSeq
-from porecpy.sam_utils import downgrade_mm_tag, pysam_verbosity, SamFlags
-from porecpy.settings import (
+from pore_c_py.aligns import get_pairs, group_colinear, PairedMonomers
+from pore_c_py.log import get_logger
+from pore_c_py.model import ConcatemerReadSeq, MonomerReadSeq, ReadSeq
+from pore_c_py.sam_utils import downgrade_mm_tag, pysam_verbosity, SamFlags
+from pore_c_py.settings import (
     DEFAULT_ALIGN_HEADER,
     DOWNGRADE_MM,
     EXE_NAME,

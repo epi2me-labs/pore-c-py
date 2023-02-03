@@ -5,8 +5,8 @@ from numpy.testing import assert_allclose, assert_array_equal
 import polars as pl
 import pytest
 
-from porecpy.model import EnzymeCutter
-from porecpy.testing import (
+from pore_c_py.model import EnzymeCutter
+from pore_c_py.testing import (
     assign_snps_to_fragments,
     random_concatemer_generator,
     Scenario,

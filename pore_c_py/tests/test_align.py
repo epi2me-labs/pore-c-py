@@ -5,7 +5,7 @@ from typing import List, Optional, Tuple
 
 import pytest
 
-from porecpy.aligns import (
+from pore_c_py.aligns import (
     annotate_monomer_alignments,
     calculate_genomic_distance,
     get_pairs,
@@ -14,8 +14,13 @@ from porecpy.aligns import (
     PairAlignState,
     PairData
 )
-from porecpy.model import AlignInfo, ConcatemerCoords, MonomerReadSeq, ReadSeq
-from porecpy.sam_utils import SamFlags
+from pore_c_py.model import (
+    AlignInfo,
+    ConcatemerCoords,
+    MonomerReadSeq,
+    ReadSeq
+)
+from pore_c_py.sam_utils import SamFlags
 
 
 def _make_mock_monomer_aligns(

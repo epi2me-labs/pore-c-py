@@ -1,4 +1,4 @@
-# porecpy requirements
+# pore_c_py requirements
 typer==0.6.1
 biopython==1.79
 polars==0.14.0

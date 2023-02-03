@@ -5,8 +5,8 @@ from typing import List
 from pysam import AlignedSegment, AlignmentHeader
 import pytest
 
-from porecpy.model import ConcatemerCoords
-from porecpy.sam_utils import (
+from pore_c_py.model import ConcatemerCoords
+from pore_c_py.sam_utils import (
     CONCATEMER_TAG,
     downgrade_mm_tag,
     pysam_verbosity,

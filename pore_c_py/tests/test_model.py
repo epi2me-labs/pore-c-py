@@ -2,11 +2,11 @@
 from pysam import AlignedSegment, AlignmentHeader, FastxRecord
 import pytest
 
-from porecpy.aligns import (
+from pore_c_py.aligns import (
     annotate_monomer_alignments,
     group_aligns_by_concatemers
 )
-from porecpy.model import (
+from pore_c_py.model import (
     AlignInfo,
     ConcatemerCoords,
     ConcatemerReadSeq,
@@ -16,8 +16,13 @@ from porecpy.model import (
     Walk,
     WalkSegment
 )
-from porecpy.sam_utils import CONCATEMER_TAG, MOLECULE_TAG, SamFlags, WALK_TAG
-from porecpy.settings import DEFAULT_ALIGN_HEADER
+from pore_c_py.sam_utils import (
+    CONCATEMER_TAG,
+    MOLECULE_TAG,
+    SamFlags,
+    WALK_TAG
+)
+from pore_c_py.settings import DEFAULT_ALIGN_HEADER
 
 
 @pytest.mark.parametrize(

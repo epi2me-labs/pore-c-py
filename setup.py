@@ -1,5 +1,5 @@
 """
-porecpy setup script.
+pore_c_py setup script.
 """
 import os
 import pkg_resources
@@ -7,7 +7,7 @@ import re
 from setuptools import setup, find_packages
 import sys
 
-__pkg_name__ = 'porecpy'
+__pkg_name__ = 'pore_c_py'
 __author__ = 'epi2melabs'
 __description__ = 'Analyse Pore-c data.'
 
@@ -54,5 +54,5 @@ setup(
     zip_safe=False,
     install_requires=install_requires,
     packages=find_packages(exclude=("tests",)),
-    entry_points={"console_scripts": ["porecpy = porecpy.main:run_main"]},
+    entry_points={"console_scripts": ["pore_c_py = pore_c_py.main:run_main"]},
 )

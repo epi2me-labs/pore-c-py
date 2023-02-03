@@ -6,11 +6,11 @@ from typing import List, Optional
 
 import typer
 
-from porecpy.aligns import (
+from pore_c_py.aligns import (
     annotate_monomer_alignments,
     group_aligns_by_concatemers
 )
-from porecpy.io import (
+from pore_c_py.io import (
     AnnotatedMonomerFC,
     AnnotatedMonomerWriter,
     create_chunked_bam,
@@ -20,9 +20,9 @@ from porecpy.io import (
     get_monomer_aligns,
     get_monomer_writer,
 )
-from porecpy.log import get_logger, init_logger
-from porecpy.model import EnzymeCutter
-from porecpy.testing import Scenario
+from pore_c_py.log import get_logger, init_logger
+from pore_c_py.model import EnzymeCutter
+from pore_c_py.testing import Scenario
 
 # from rich.console import Console
 

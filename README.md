@@ -6,17 +6,17 @@ Use `--help` with to find detailed usage instructions.
 ## Installation
 Via pip:
 ```
-pip install porecpy
+pip install pore_c_py
 ```
 Or via conda:
 ```
-conda install -c epi2me-labs porecpy
+conda install -c epi2me-labs pore_c_py
 ```
 
 ## Usage
 
 ```
-$ porecpy --help
+$ pore_c_py --help
 usage: porecpy [OPTIONS] COMMAND [ARGS].
 
 Available subcommands are:
@@ -28,11 +28,11 @@ Available subcommands are:
 
 *Digest concatemer sequences in to monomers:*
 ```
-porecpy digest <input concatemers bam> <restriction enzyme> <output monomers bam file name>
+pore_c_py digest <input concatemers bam> <restriction enzyme> <output monomers bam file name>
 ```
 
 *Parse a bam of aligned monomers:*
 ```
-porecpy parse-bam <input bam> <output bam file name>
+pore_c_py parse-bam <input bam> <output bam file name>
 ```
 
