@@ -1,9 +1,10 @@
 # Pore_c_py
-This package provides python scripts for working with Pore-c data
+This package provides python scripts for working with Pore-C data
 
 Use `--help` with to find detailed usage instructions.
 
 ## Installation
+
 Via pip:
 ```
 pip install pore-c-py
@@ -16,7 +17,7 @@ conda install -c epi2me-labs pore-c-py
 ## Usage
 
 ```
-$ pore_c_py --help
+$ pore-c-py --help
 usage: pore_c_py [OPTIONS] COMMAND [ARGS].
 
 Available subcommands are:
@@ -28,11 +29,11 @@ Available subcommands are:
 
 *Digest concatemer sequences in to monomers:*
 ```
-pore_c_py digest <input concatemers bam> <restriction enzyme> <output monomers bam file name>
+pore-c-py digest <input concatemers bam> <restriction enzyme> <output monomers bam file name>
 ```
 
 *Parse a bam of aligned monomers:*
 ```
-pore_c_py parse-bam <input bam> <output bam file name>
+pore-c-py parse-bam <input bam> <output bam file name>
 ```
 
