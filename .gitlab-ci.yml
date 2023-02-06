@@ -36,6 +36,8 @@ test:
 
 deploy-checks:
     stage: prerelease
+    variables: 
+        PACKAGE_NAME: pore_c_py
     script:
         - !reference [.check, python-version]
         - !reference [.check, changelog]
