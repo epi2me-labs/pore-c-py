@@ -4,6 +4,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [unreleased]  # this will need to be 2.0.0 since CLI has changed
+### Changed
+- Simplified logging for easier parsing.
+- Rewrote CLI, removing utils and keeping only those programs which are used.
+### Removed
+- A lot of code.
+
 ## [v1.0.0]
 ### Changed
 - Tidy up for release as a conda package in the EPI2MELabs channel 

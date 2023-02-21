@@ -6,11 +6,10 @@ from functools import lru_cache
 from itertools import combinations, groupby
 from typing import Iterable, List, Literal, Optional, Tuple
 
-from pore_c_py.log import get_logger
+from pore_c_py.log import get_named_logger
 from pore_c_py.model import AlignInfo, MonomerReadSeq, Walk
 from pore_c_py.sam_utils import AlignCategory, MOLECULE_TAG, SamFlags, WALK_TAG
 
-logger = get_logger()
 
 PairedMonomers = Tuple[
     Optional[MonomerReadSeq], Optional[MonomerReadSeq], Optional["PairData"]
@@ -84,6 +83,7 @@ def group_aligns_by_concatemers(
 def pick_walk_aligns(
         aligns: List[MonomerReadSeq], concat_id: str) -> List[bool]:
     """Pick walk aligns."""
+    logger = get_named_logger("WalkAligns")
     expected_monomers = aligns[0].coords.subread_total
     keep = [False] * len(aligns)
 
