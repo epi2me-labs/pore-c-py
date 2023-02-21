@@ -1,69 +1,34 @@
 """Log."""
+import argparse
 import logging
 from pathlib import Path
-from typing import Optional
 
 
-# taken from Remora
-class CustomFormatter(logging.Formatter):
-    """Custom formatter for python logging module.
+def log_level():
+    """Parser to set logging level and acquire software version/commit."""
+    parser = argparse.ArgumentParser(
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter, add_help=False)
 
-    Creates separate logging format for error,
-    warning, info and debug logging
-    levels.
+    modify_log_level = parser.add_mutually_exclusive_group()
+    modify_log_level.add_argument(
+        '--debug', action='store_const',
+        dest='log_level', const=logging.DEBUG, default=logging.INFO,
+        help='Verbose logging of debug information.')
+    modify_log_level.add_argument(
+        '--quiet', action='store_const',
+        dest='log_level', const=logging.WARNING, default=logging.INFO,
+        help='Minimal logging; warnings only.')
+    parser.add_argument("--logfile", type=Path, help="Specify a log file.")
+
+    return parser
+
+
+def get_named_logger(name):
+    """Create a logger with a name.
+
+    :param name: name of logger.
     """
-
-    err_fmt = "*" * 100 + "\n\tERROR: %(msg)s\n" + "*" * 100
-    warn_fmt = "*" * 20 + " WARNING: %(msg)s " + "*" * 20
-    info_fmt = "[%(asctime)s %(module)s] %(message)s"
-    dbg_fmt = (
-        "DBG %(asctime)s : %(msg)s --- %(processName)s-"
-        + "%(threadName)s %(module)s.py:%(lineno)d"
-    )
-
-    def __init__(self, fmt="[%(asctime)s] %(message)s"):
-        """Init."""
-        super().__init__(fmt=fmt, datefmt="%H:%M:%S", style="%")
-
-    def format(self, record):
-        """Format."""
-        format_orig = self._fmt
-
-        # Replace the original format with one customized by logging level
-        if record.levelno == logging.DEBUG:
-            self._style._fmt = self.dbg_fmt
-        elif record.levelno == logging.INFO:
-            self._style._fmt = self.info_fmt
-        elif record.levelno == logging.WARNING:
-            self._style._fmt = self.warn_fmt
-        elif record.levelno == logging.ERROR:
-            self._style._fmt = self.err_fmt
-        result = logging.Formatter.format(self, record)
-
-        self._fmt = format_orig
-
-        return result
-
-
-CONSOLE = logging.StreamHandler()
-CONSOLE.setLevel(logging.INFO)
-CONSOLE.setFormatter(CustomFormatter())
-ROOT_LOGGER = logging.getLogger("porecpy")
-ROOT_LOGGER.setLevel(logging.DEBUG)
-ROOT_LOGGER.addHandler(CONSOLE)
-
-
-def init_logger(quiet: bool = False, logfile: Optional[Path] = None):
-    """Initiate logger."""
-    if logfile:
-        fh = logging.FileHandler(logfile, "w")
-        fh.setLevel(logging.DEBUG)
-        fh.setFormatter(CustomFormatter())
-        ROOT_LOGGER.addHandler(fh)
-    if quiet:
-        CONSOLE.setLevel(logging.WARNING)
-
-
-def get_logger():
-    """Get logger."""
-    return logging.getLogger("porecpy")
+    name = name.ljust(10)[:10]  # so logging is aligned
+    logger = logging.getLogger('{}.{}'.format(__package__, name))
+    logger.name = name
+    return logger

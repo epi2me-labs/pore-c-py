@@ -23,7 +23,7 @@ import pyarrow.parquet as pq
 from pysam import AlignmentFile, AlignmentHeader, FastaFile, FastxFile
 
 from pore_c_py.aligns import get_pairs, group_colinear, PairedMonomers
-from pore_c_py.log import get_logger
+from pore_c_py.log import get_named_logger
 from pore_c_py.model import ConcatemerReadSeq, MonomerReadSeq, ReadSeq
 from pore_c_py.sam_utils import downgrade_mm_tag, pysam_verbosity, SamFlags
 from pore_c_py.settings import (
@@ -39,7 +39,6 @@ T = TypeVar("T", ReadSeq, ConcatemerReadSeq, MonomerReadSeq)
 FASTQ_EXTS = [".fastq", ".fastq.gz", ".fq", ".fastq.gz"]
 FASTA_EXTS = [".fasta", ".fa", ".fasta.gz", ".fasta.gz"]
 SAM_EXTS = [".sam", ".bam", ".cram"]
-logger = get_logger()
 
 
 @dataclass
@@ -621,6 +620,7 @@ def get_alignment_header(
     add_pg: bool = True,
 ) -> AlignmentHeader:
     """Get alignment header."""
+    logger = get_named_logger("AlnHeader")
     # TODO: add tests for this
     data = {}
     if source_files:
@@ -689,6 +689,7 @@ def create_chunked_bam(
     max_reads: Optional[int] = None,
 ) -> List[Tuple[Path, int]]:
     """Create chunked bam."""
+    logger = get_named_logger("ChunkBAM")
     header = get_alignment_header(source_files=input_files)
     output = []
     with pysam_verbosity(0):

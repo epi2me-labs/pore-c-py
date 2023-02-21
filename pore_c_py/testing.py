@@ -21,7 +21,7 @@ from pysam import (
 )
 
 from pore_c_py.io import fastq_to_ubam, FileCollection
-from pore_c_py.log import get_logger
+from pore_c_py.log import get_named_logger
 from pore_c_py.model import (
     AlignInfo,
     ConcatemerCoords,
@@ -34,8 +34,6 @@ from pore_c_py.model import (
 )
 from pore_c_py.monomers import GenomicFragment
 from pore_c_py.sam_utils import MOLECULE_TAG
-
-logger = get_logger()
 
 
 def simulate_walk(
@@ -240,6 +238,7 @@ def simulate_sequence_with_cut_sites(
     correct_ends: bool = True,
 ) -> Tuple[List[int], str]:
     """Simulate sequence with cut sites."""
+    logger = get_named_logger("SimlateCut")
     from Bio import Restriction
     from Bio.Seq import Seq
 
@@ -432,6 +431,7 @@ def simulate_haplotypes(
     random_state: Optional[Generator] = None,
 ) -> List[SNPHaplotypes]:
     """Simulate haplotypes."""
+    logger = get_named_logger("SimlateHap")
     if random_state is None:
         random_state = default_rng()
     try:
@@ -974,7 +974,6 @@ class Scenario:
         if not ns_bam.exists():
             minimap_exe = which("minimap2")
             if not minimap_exe:
-                # logger.error("No minimap executable found")
                 return None
             try:
                 sp.check_call(
@@ -994,47 +993,3 @@ class Scenario:
     def save_files(self):
         """Save files."""
         pass
-
-    #    n = self.fragments_df.shape[0]
-    #    p_cis = 1.0
-    #    p_trans = 1.0 - p_cis
-
-    #    # set default value to probabilty of a trans conctact
-    #    p = np.ones((n, n)) * p_trans
-    #    for row in (
-    #        self.fragments_df.groupby("chrom")
-    #        .fragment_id.agg(["min", "max"])
-    #        .itertuples()
-    #    ):
-    #        # set each cis block to probability cis (no length dependence)
-    #        p[row.min - 1 : row.max, row.min - 1 : row.max] = p_cis
-    #    # no self-contacts
-    #    np.fill_diagonal(p, 0)
-    #    # renormalize
-    #    p = p / p.sum(axis=1)
-
-    #    num_concatemers = 100
-    #    concatemer_size = self.random_state.poisson(5, num_concatemers)
-    #    concatemers = []
-    #    for x, size in enumerate(concatemer_size):
-    #        start_idx = self.random_state.integers(0, n)
-    #        path = [start_idx]
-    #        counter = 0
-    #        while (len(path) < size) and counter < 100:
-    #            next_frag = np.random.choice(n, p=p[:, start_idx])
-    #            if next_frag not in path:
-    #                path.append(next_frag)
-    #            counter += 1
-    #        concatemers.append([_ + 1 for _ in path])  # convert back to
-    #        fragement ids
-
-    #    df = self.fragments_df.set_index(["fragment_id"]).sort_index()
-    #    logger.debug(df.index[-2:])
-    #    ff = FastaFile(self.reference_fasta)
-    #    for idx, path in enumerate(concatemers):
-    #        segments = []
-    #        for row in df.loc[path, [
-    #           "chrom", "start", "end"]].itertuples(index=False):
-    #            logger.debug(row)
-    #            segments.append(ff.fetch(row.chrom, row.start, row.end))
-    #        seq = "".join(segments)
