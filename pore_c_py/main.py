@@ -1,20 +1,19 @@
 """Command-line interface."""
 import argparse
-from contextlib import closing
+import contextlib
 from itertools import islice
 import logging
 from pathlib import Path
 import sys
 
-from pore_c_py.aligns import annotate_monomer_alignments
+import pysam
+
+from pore_c_py import annotate
 from pore_c_py.io import (
-    AnnotatedMonomerFC,
-    AnnotatedMonomerWriter,
     create_chunked_bam,
     find_files,
     get_alignment_header,
     get_concatemer_seqs,
-    get_monomer_aligns,
     get_monomer_writer,
 )
 from pore_c_py.log import get_named_logger, log_level
@@ -81,50 +80,55 @@ def porec_parser():
         "--remove_tags", nargs="+", default=list(),
         help="Optionally remove SAM tags from input")
 
-    bam_parse = subparsers.add_parser(
-        "parse-bam",
+    annotate_parse = subparsers.add_parser(
+        "annotate",
         description=(
             "Filter a BAM of concatemer-grouped monomer alignments, "
             "and add 'walk' tag."),
         parents=[log_level()],
         formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-    bam_parse.set_defaults(func=parse_bam)
-    bam_parse.add_argument(
+    annotate_parse.set_defaults(func=annotate_bam)
+    annotate_parse.add_argument(
         "bam", type=Path,
-        help="A namesorted BAM of aligned + unaligned monomers.")
-    bam_parse.add_argument(
+        help=(
+            "A (concatemer) namesorted BAM of aligned "
+            "and unaligned monomers."))
+    annotate_parse.add_argument(
         "output_prefix", type=Path,
         help="Output files will share this prefix")
-    bam_parse.add_argument(
+    annotate_parse.add_argument(
+        "--threads", default=1, type=int,
+        help="Compute threads of bam compression.")
+    annotate_parse.add_argument(
         "--force", default=False, action="store_true",
         help="Overwite any existing files")
-    bam_parse.add_argument(
+    annotate_parse.add_argument(
         "--monomers", default=False, action="store_true",
-        help="Create a namesorted BAM file with pore-c annotations")
-    bam_parse.add_argument(
+        help="Create a namesorted BAM file with Pore-C annotations")
+    annotate_parse.add_argument(
         "--chromunity", default=False, action="store_true",
         help="Create a chromunity-compatible parquet")
-    bam_parse.add_argument(
+    annotate_parse.add_argument(
         "--chromunity_merge_distance", type=int,
         help=(
             "Merge co-linear monomers that are separated by less than this"
             "distance into a single monomer"))
-    bam_parse.add_argument(
+    annotate_parse.add_argument(
         "--summary", default=False, action="store_true")
-    bam_parse.add_argument(
+    annotate_parse.add_argument(
         "--direct_only", default=False, action="store_true",
         help=(
             "Only output monomer pairs that are adjacent on the concatemer"
             ", don't do combinatorial expansion."))
-    bam_parse.add_argument(
+    annotate_parse.add_argument(
         "--paired_end", default=False, action="store_true",
         help="Create a mock paired-end BAM")
-    bam_parse.add_argument(
+    annotate_parse.add_argument(
         "--paired_end_minimum_distance", type=int,
         help=(
             "Filter out any pairs shorter than this distance."
             "Note setting this removes all trans pairs."))
-    bam_parse.add_argument(
+    annotate_parse.add_argument(
         "--paired_end_maximum_distance", type=int,
         help=(
             "Filter out any pairs longer than this distance. "
@@ -177,14 +181,15 @@ def digest(args):
         for read in read_stream
         for monomer in read.cut(cutter))
 
-    with closing(get_monomer_writer(args.output_bam, header=header)) as writer:
+    with contextlib.closing(
+            get_monomer_writer(args.output_bam, header=header)) as writer:
         writer.consume(monomer_stream)
     logger.info("Finished digestion.")
 
 
-def parse_bam(args):
+def annotate_bam(args):
     """Parse BAM entry point."""
-    logger = get_named_logger("ParseBAM")
+    logger = get_named_logger("AnntateBAM")
     logger.info(f"Processing reads from {args.bam}")
     if all(
         x is False for x in (
@@ -193,40 +198,37 @@ def parse_bam(args):
             "You must specify at least one of --monomers, --chromunity, "
             "--summary, or --paired_end")
         sys.exit(1)
-    input_files = [args.bam]
-    drop_outputs = []
-    for flag, filekey in [
-        (args.monomers, "namesorted_bam"),
-        (args.paired_end, "paired_end_bam"),
-        (args.chromunity, "chromunity_parquet"),
-        (args.summary, "summary_json"),
-    ]:
-        if not flag:
-            drop_outputs.append(filekey)
-    output_files = AnnotatedMonomerFC.with_prefix(
-        args.output_prefix, drop=drop_outputs)
-    if output_files.exists_any() and not args.force:
-        logger.error(
-            "Some of the outputs already exist,"
-            "please remove before continuing"
-        )
-        raise IOError
-    header = get_alignment_header(source_files=input_files)
-    monomer_aligns = get_monomer_aligns(input_files)
-    annotated_stream = annotate_monomer_alignments(monomer_aligns)
-    with closing(
-        AnnotatedMonomerWriter.from_file_collection(
-            output_files,
-            header=header,
-            chromunity_merge_distance=args.chromunity_merge_distance,
-            paired_end_minimum_distance=args.paired_end_minimum_distance,
-            paired_end_maximum_distance=args.paired_end_maximum_distance,
-        )
-    ) as writer:
-        writer.consume(annotated_stream, direct_only=args.direct_only)
 
-    if args.summary:
-        logger.info(f"Summary information at {args.output_files.summary_json}")
+    namesorted_bam = Path("{prefix}.ns.bam")
+    paired_end_bam = Path("{prefix}.pe.bam")
+    summary_json = Path("{prefix}.summary.json")
+    chromunity_parquet = Path("{prefix}.chromunity.parquet")
+    outputs = (
+        namesorted_bam, paired_end_bam, summary_json, chromunity_parquet)
+
+    if any(x.exists() for x in outputs) and not args.force:
+        logger.error(
+            "Some of the outputs exist, please remove before continuing.")
+        sys.exit(1)
+
+    # TODO: other outputs
+    with contextlib.ExitStack() as manager:
+        alns = annotate.annotate_alignments(args.bam)
+        header = annotate.update_header(next(alns))
+        outbam = pysam.AlignmentFile(
+            namesorted_bam, "wb", header=header, threads=args.threads)
+        manager.enter_context(outbam)
+
+        for concat_walk in alns:
+            if args.monomers:
+                for aln in concat_walk:
+                    outbam.write(aln)
+            if args.chromunity:
+                pass
+            if args.summary:
+                pass
+            if args.paired_end:
+                pass
     logger.info("Finished BAM parsing.")
 
 
