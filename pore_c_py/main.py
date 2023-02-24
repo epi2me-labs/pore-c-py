@@ -8,7 +8,7 @@ import sys
 
 import pysam
 
-from pore_c_py import annotate
+from pore_c_py import annotate, writers
 from pore_c_py.io import (
     create_chunked_bam,
     find_files,
@@ -199,10 +199,10 @@ def annotate_bam(args):
             "--summary, or --paired_end")
         sys.exit(1)
 
-    namesorted_bam = Path("{prefix}.ns.bam")
-    paired_end_bam = Path("{prefix}.pe.bam")
-    summary_json = Path("{prefix}.summary.json")
-    chromunity_parquet = Path("{prefix}.chromunity.parquet")
+    namesorted_bam = Path(f"{args.output_prefix}.ns.bam")
+    paired_end_bam = Path(f"{args.output_prefix}.pe.bam")
+    summary_json = Path(f"{args.output_prefix}.summary.json")
+    chromunity_parquet = Path(f"{args.output_prefix}.chromunity.parquet")
     outputs = (
         namesorted_bam, paired_end_bam, summary_json, chromunity_parquet)
 
@@ -213,22 +213,32 @@ def annotate_bam(args):
 
     # TODO: other outputs
     with contextlib.ExitStack() as manager:
-        alns = annotate.annotate_alignments(args.bam)
-        header = annotate.update_header(next(alns))
-        outbam = pysam.AlignmentFile(
-            namesorted_bam, "wb", header=header, threads=args.threads)
-        manager.enter_context(outbam)
+        inbam = pysam.AlignmentFile(args.bam, "r", check_sq=False)
+        manager.enter_context(inbam)
 
-        for concat_walk in alns:
+        if args.monomers:
+            header = annotate.update_header(inbam.header)
+            outbam = pysam.AlignmentFile(
+                namesorted_bam, "wb", header=header, threads=args.threads)
+            manager.enter_context(outbam)
+        if args.chromunity:
+            chrom_writer = writers.ChromunityWriter(
+                chromunity_parquet,
+                merge_distance=args.chromunity_merge_distance)
+            manager.enter_context(chrom_writer)
+
+        for concat_walk in annotate.annotate_alignments(inbam):
             if args.monomers:
                 for aln in concat_walk:
                     outbam.write(aln)
             if args.chromunity:
-                pass
-            if args.summary:
-                pass
-            if args.paired_end:
-                pass
+                chrom_writer.write(concat_walk)
+            if args.summary or args.paired_end:
+                # make pairs, send to writers.
+                if args.summary:
+                    pass
+                if args.paired_end:
+                    pass
     logger.info("Finished BAM parsing.")
 
 
