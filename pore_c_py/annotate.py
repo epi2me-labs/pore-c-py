@@ -3,8 +3,6 @@
 from itertools import groupby
 import sys
 
-import pysam
-
 import pore_c_py
 from pore_c_py.log import get_named_logger
 
@@ -71,49 +69,42 @@ def update_header(header):
     return header
 
 
-def annotate_alignments(input_bam):
+def annotate_alignments(bamfile):
     """Annotate (and filter) monomer alignments.
 
-    :param input_bam: The input BAM file.
+    :param bamfile: pysam.AlignmentFile
     :yields: the file header following by lists of alignments by concatemer.
 
-    Alignments are group by concatemer (the input should be sorted by
+    Alignments are grouped by concatemer (the input should be sorted by
     concatemer stored in the MI tag), and one alignment is selected per
     monomer. Alignments are annotated with a "walk", which simply enumerates
     how the monomers were linked together.
     """
-    logger.info(f"Annotating alignments from file {input_bam}.")
-
     n_monomers = 0
     seen = set()
-    with pysam.AlignmentFile(input_bam, "r", check_sq=False) as bamfile:
-        # first yield header, this allows the input to be stdin and for us
-        # to still be able to create a new BAM from the stream.
-        yield bamfile.header
-        # group alignments by concatemer and select one alignment per monomer
-        for concat_id, aligns in groupby(
-                bamfile.fetch(until_eof=True),
-                lambda x: x.get_tag("MI")):
-            if concat_id in seen:
-                logger.warning(
-                    f"Input file appears unsorted, found {concat_id} "
-                    "more than once.")
-            seen.add(concat_id)
-            walk = list()
-            for monomer_id, alns in groupby(aligns, lambda x: x.query_name):
-                n_monomers += 1
-                sorted_aligns = sort_by_category(alns, monomer_id)
-                aln = next(sorted_aligns)
-                walk.append(aln)
-            expected_monomers = walk[-1].get_tag("Xc")[4]
-            concat_id = walk[-1].get_tag("MI")
-            if expected_monomers != len(walk):
-                logger.warning(
-                    f"Expected to see {expected_monomers} alignments for "
-                    f"concatemer {concat_id}, found {len(walk)}"
-                )
-            walk_tag = ";".join(get_monomer_tag(aln) for aln in walk)
-            for aln in walk:
-                aln.set_tag("Xw", walk_tag)
-            yield walk
+    for concat_id, aligns in groupby(
+            bamfile.fetch(until_eof=True),
+            lambda x: x.get_tag("MI")):
+        if concat_id in seen:
+            logger.warning(
+                f"Input file appears unsorted, found {concat_id} "
+                "more than once.")
+        seen.add(concat_id)
+        walk = list()
+        for monomer_id, alns in groupby(aligns, lambda x: x.query_name):
+            n_monomers += 1
+            sorted_aligns = sort_by_category(alns, monomer_id)
+            aln = next(sorted_aligns)
+            walk.append(aln)
+        expected_monomers = walk[-1].get_tag("Xc")[4]
+        concat_id = walk[-1].get_tag("MI")
+        if expected_monomers != len(walk):
+            logger.warning(
+                f"Expected to see {expected_monomers} alignments for "
+                f"concatemer {concat_id}, found {len(walk)}"
+            )
+        walk_tag = ";".join(get_monomer_tag(aln) for aln in walk)
+        for aln in walk:
+            aln.set_tag("Xw", walk_tag)
+        yield walk
     logger.info(f"Found {n_monomers} monomers in {len(seen)} concatemers.")
