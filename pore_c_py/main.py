@@ -1,23 +1,22 @@
 """Command-line interface."""
 import argparse
 import contextlib
-from itertools import islice
 import logging
+import os
 from pathlib import Path
+import stat
 import sys
 
 import pysam
 
 from pore_c_py import annotate, writers
+from pore_c_py import digests
+from pore_c_py.annotate import update_header
 from pore_c_py.io import (
     create_chunked_bam,
-    find_files,
-    get_alignment_header,
-    get_concatemer_seqs,
-    get_monomer_writer,
+    find_files
 )
 from pore_c_py.log import get_named_logger, log_level
-from pore_c_py.model import EnzymeCutter
 
 
 def porec_parser():
@@ -63,15 +62,16 @@ def porec_parser():
         "enzyme",
         help="A restriction enzyme name eg. NlaIII")
     digest_parse.add_argument(
-        "output", type=Path,
-        help="An unaligned BAM file with a separate record for each monomer")
+        "--output", type=Path, default=sys.stdout,
+        help="An unaligned BAM file with a separate record for each monomer,"
+        "default will write to standard out.")
     digest_parse.add_argument(
         "--recursive", default=False, action="store_true",
         help=(
             "If INPUT is a directory search recursively "
             "for files matching 'glob'")),
     digest_parse.add_argument(
-        "--glob", default="*.fastq",
+        "--glob", default="*.bam",
         help="If INPUT is a directory use this glob to search for files")
     digest_parse.add_argument(
         "--max_reads", type=int, default=0,  # should be inf?
@@ -79,6 +79,9 @@ def porec_parser():
     digest_parse.add_argument(
         "--remove_tags", nargs="+", default=list(),
         help="Optionally remove SAM tags from input")
+    digest_parse.add_argument(
+        "--threads", default=1, type=int,
+        help="Compute threads of bam compression.")
 
     annotate_parse = subparsers.add_parser(
         "annotate",
@@ -163,27 +166,39 @@ def porec_parser():
     return parser
 
 
+def stdout_is_regular_file() -> bool:
+    """
+    Detect if standard output is a regular file (or say a pipe).
+
+    :return: True if stdout is a regular file, else False.
+    """
+    mode = os.fstat(sys.stdout.buffer.fileno()).st_mode
+    return stat.S_ISREG(mode)
+
+
 def digest(args):
     """Digest entry point."""
     logger = get_named_logger("Digest")
-    logger.info("Digesting concatemers.")
-    input_files = list(find_files(
-        args.input, glob=args.glob, recursive=args.recursive))
-    header = get_alignment_header(source_files=args.input_files)
-    args.remove_tags.append('mv')  # always remove this, as we don't chop it up
-    read_stream = get_concatemer_seqs(
-        input_files, remove_tags=args.remove_tags)
-    if args.max_reads:
-        read_stream = islice(read_stream, args.max_reads)
-    cutter = EnzymeCutter.from_name(args.enzyme)
-    monomer_stream = (
-        monomer.read_seq
-        for read in read_stream
-        for monomer in read.cut(cutter))
-
-    with contextlib.closing(
-            get_monomer_writer(args.output_bam, header=header)) as writer:
-        writer.consume(monomer_stream)
+    logger.info(f"Digesting concatemers from {args.input}.")
+    input_files = list(
+        find_files(
+            args.input, glob=args.glob, recursive=args.recursive))
+    with pysam.AlignmentFile(
+            str(input_files[0]), "r", check_sq=False) as inputfile:
+        header = update_header(inputfile.header)
+    mode = "wb"
+    if (args.output is not sys.stdout) and (not stdout_is_regular_file()):
+        mode = "wb0"
+    with pysam.AlignmentFile(
+            args.output, header=header,
+            threads=args.threads, mode=mode) as outbam:
+        for input_file in input_files:
+            with pysam.AlignmentFile(
+                    str(input_file), "r", check_sq=False) as inputfile:
+                for monomer in digests.get_concatemer_seqs(
+                    inputfile, enzyme=args.enzyme,
+                        remove_tags=args.remove_tags):
+                    outbam.write(monomer)
     logger.info("Finished digestion.")
 
 
