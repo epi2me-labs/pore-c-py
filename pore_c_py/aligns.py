@@ -6,9 +6,9 @@ from functools import lru_cache
 from itertools import combinations, groupby
 from typing import Iterable, List, Literal, Optional, Tuple
 
-from pore_c_py.log import get_named_logger
 from pore_c_py.model import AlignInfo, MonomerReadSeq, Walk
 from pore_c_py.sam_utils import AlignCategory, MOLECULE_TAG, SamFlags, WALK_TAG
+from pore_c_py.utils import get_named_logger
 
 
 PairedMonomers = Tuple[

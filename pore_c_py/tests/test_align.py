@@ -9,8 +9,6 @@ from pore_c_py.aligns import (
     annotate_monomer_alignments,
     calculate_genomic_distance,
     get_pairs,
-    group_colinear,
-    is_colinear,
     PairAlignState,
     PairData
 )
@@ -129,36 +127,6 @@ def test_short_walk(m1, caplog):
             caplog.record_tuples[-1][2]
             == "Expected to see 3 alignments for concatemer C, found 2"
         )
-
-
-def test_to_sam(m1):
-    """Test to sam."""
-    m = list(annotate_monomer_alignments(m1))[0][1]
-    # baseline
-    assert (
-        m[0].read_seq.to_sam(strip_tags=True)
-        == "C:0:5\t0\tchr1\t1\t0\t*\t*\t0\t0\t\t\t"
-    )
-    # alter read name at write time
-    assert (
-        m[0].read_seq.to_sam(read_name="blah", strip_tags=True)
-        == "blah\t0\tchr1\t1\t0\t*\t*\t0\t0\t\t\t"
-    )
-    # strip aligmnent info
-    assert (
-        m[0].read_seq.to_sam(as_unaligned=True, strip_tags=True)
-        == "C:0:5\t4\t*\t0\t0\t*\t*\t0\t0\t\t\t"
-    )
-    # strip aligmnent info
-    assert (
-        m[0].read_seq.to_sam(as_unaligned=True, strip_tags=True)
-        == "C:0:5\t4\t*\t0\t0\t*\t*\t0\t0\t\t\t"
-    )
-    # alter flag
-    assert (
-        m[0].read_seq.to_sam(flag=SamFlags.from_int(8), strip_tags=True)
-        == "C:0:5\t8\tchr1\t1\t0\t*\t*\t0\t0\t\t\t"
-    )
 
 
 @pytest.fixture
@@ -293,73 +261,3 @@ def test_read_pair_to_sam():
 
     # print(pair_data)
     # raise ValueError(pair_data)
-
-
-def _align_from_tuple(t) -> AlignInfo:
-    """Align from tuple."""
-    return AlignInfo(
-        ref_name=t[0],
-        ref_pos=t[1],
-        length=t[2] - t[1],
-        flag=SamFlags(
-            reverse=t[3] == "-", unmap=len(t) > 4 and t[4] is False).to_int(),
-    )
-
-
-@pytest.mark.parametrize(
-    "left,right,tol,expected",
-    [
-        (("chr1", 0, 10, "+"), ("chr1", 0, 20, "+"), 0, True),  # overlapping
-        (("chr1", 0, 10, "+"), ("chr1", 0, 20, "-"), 0, False),
-        (("chr1", 0, 10, "-"), ("chr1", 0, 20, "-"), 0, True),
-        (("chr1", 0, 10, "+"), ("chr2", 0, 20, "+"), 0, False),
-        (
-            ("chr1", 0, 10, "+"),
-            ("chr1", 10, 20, "+"),
-            1,  # need tol=1 for bookended features
-            True,
-        ),
-        (
-            ("chr1", 0, 10, "+"),
-            ("chr1", 5, 20, "+"),
-            5,  # allow some wiggle
-            True,
-        ),
-        (
-            ("chr1", 0, 10, "+"),
-            ("chr1", 0, 0, ".", False),
-            0,
-            False,
-        ),  # unaligned not colinear
-    ],
-)
-def test_is_colinear(left, right, tol, expected):
-    """Test is colinear."""
-    res = is_colinear(
-        _align_from_tuple(left),
-        _align_from_tuple(right),
-        tol=tol,
-    )
-    assert res == expected
-
-
-@pytest.mark.parametrize(
-    "aligns,expected",
-    [
-        [
-            [("chr1", 0, 10, "+"), ("chr1", 9, 20, "+"), ("chr2", 0, 10, "+")],
-            [[0, 1], [2]],
-        ],
-        [
-            [
-                ("chr1", 0, 10, "+"),
-                ("chr1", 9, 20, "+", False),
-                ("chr1", 20, 30, "+")],
-            [[0], [1], [2]],
-        ],
-    ],
-)
-def test_group_colinear(aligns, expected):
-    """Test group colinear."""
-    res = group_colinear([_align_from_tuple(t) for t in aligns])
-    assert res == expected

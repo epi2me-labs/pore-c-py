@@ -5,7 +5,7 @@ from pathlib import Path
 from pysam import fqimport
 import pytest
 
-from pore_c_py.io import FileCollection, find_files, iter_reads
+from pore_c_py.io import FileCollection, iter_reads
 
 
 def test_file_collection(tmp_path):
@@ -27,35 +27,6 @@ def test_file_collection(tmp_path):
 
     test_fc.b.write_text("b")
     assert test_fc.exists_all() is True
-
-
-@pytest.mark.parametrize(
-    "layout,glob,recursive,expected",
-    [
-        (["A/a/a.fastq"], None, None, None),
-        (["a.fastq"], None, None, None),
-        (["a.fastq.gz"], None, None, []),
-        (["a.fastq", "A/a/a.fastq"], None, False, ["a.fastq"]),
-    ],
-)
-def test_find_files(tmp_path, layout, glob, recursive, expected):
-    """Test find files."""
-    root = Path(str(tmp_path))
-    if expected is None:
-        expected = layout
-    kwds = {}
-    if glob is not None:
-        kwds["glob"] = glob
-    if recursive is not None:
-        kwds["recursive"] = recursive
-    for _ in layout:
-        p = root / _
-        p.parent.mkdir(parents=True, exist_ok=True)
-        p.write_text(_)
-    res = list(
-        [str(_).replace(str(tmp_path), "")[1:] for _ in find_files(root, **kwds)] # noqa
-    )
-    assert res == expected
 
 
 @pytest.fixture

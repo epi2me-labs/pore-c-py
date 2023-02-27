@@ -21,7 +21,6 @@ from pysam import (
 )
 
 from pore_c_py.io import fastq_to_ubam, FileCollection
-from pore_c_py.log import get_named_logger
 from pore_c_py.model import (
     AlignInfo,
     ConcatemerCoords,
@@ -34,6 +33,7 @@ from pore_c_py.model import (
 )
 from pore_c_py.monomers import GenomicFragment
 from pore_c_py.sam_utils import MOLECULE_TAG
+from pore_c_py.utils import get_named_logger
 
 
 def simulate_walk(

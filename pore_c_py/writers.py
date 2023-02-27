@@ -5,6 +5,8 @@ import pyarrow as pa
 import pyarrow.parquet as pq
 import pysam
 
+from pore_c_py import align_tools
+
 
 class ChromunityWriter:
     """Chromunity writer."""
@@ -34,42 +36,6 @@ class ChromunityWriter:
                 "end": aln.reference_end,
                 "num_fragments": 1}
 
-        def is_colinear(
-                align1: pysam.AlignedSegment,
-                align2: pysam.AlignedSegment, tol: int = 1):
-            """Check if two alignments are co-linear in the genome."""
-            # if either is is unmapped then they can't be co-linear
-            if align1.is_unmapped or align2.is_unmapped:
-                return False
-            if align1.reference_name != align2.reference_name:
-                return False
-            if align1.is_reverse != align2.is_reverse:
-                return False
-            delta = min(align1.reference_end, align2.reference_end) \
-                - max(align1.reference_start, align2.reference_start)
-            # overlaps or within a distance
-            return delta > 0 or delta < tol
-
-        def group_colinear(
-                aligns: List[pysam.AlignedSegment], tol: int = 1
-                ) -> List[List[pysam.AlignedSegment]]:
-            """Group alignments into co-linear blocks."""
-            if len(aligns) < 2:
-                return [list(range(len(aligns)))]
-            res = []
-            block = []
-            last = aligns[0]
-            block = [last]
-            for aln in aligns[1:]:
-                if is_colinear(last, aln, tol=tol):
-                    block.append(aln)
-                else:
-                    res.append(block)
-                    block = [aln]
-                last = aln
-            res.append(block)
-            return res
-
         pylist = list()
         if self.merge_distance is None:
             pylist = [
@@ -77,7 +43,7 @@ class ChromunityWriter:
                 if not aln.is_unmapped]
         else:
             pylist = list()
-            for block in group_colinear(
+            for block in align_tools.group_colinear(
                     [r.read_seq.align_info for r in alignments],
                     tol=self.merge_distance):
                 if len(block) == 1:

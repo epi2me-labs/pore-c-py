@@ -1,10 +1,7 @@
 """Annotation of monomer alignments."""
-
 from itertools import groupby
-import sys
 
-import pore_c_py
-from pore_c_py.log import get_named_logger
+from pore_c_py.utils import get_named_logger
 
 logger = get_named_logger("AnntateAln")
 
@@ -45,28 +42,6 @@ def sort_by_category(alns, monomer_id):
             f"Warning: best alignment for monomer: {monomer_id} "
             f"is secondary or supplementary")
     yield from (x[0] for x in reordered)
-
-
-def update_header(header):
-    """Add PG tag to existing header.
-
-    :param bamfile: a pysam.AlignmentFile.header
-
-    """
-    header = header.to_dict()
-    pg = header.pop("PG", [])
-    name = __package__.replace("_", "-")
-    pg_data = {
-        "ID": f"{name}-{len(pg) + 1}",
-        "PN": name,
-        "VN": pore_c_py.__version__,
-        "CL": " ".join(sys.argv)}
-    if len(pg) > 0:
-        if "ID" in pg[-1]:
-            pg_data["PP"] = pg[-1]["ID"]
-    pg.append(pg_data)
-    header["PG"] = pg
-    return header
 
 
 def annotate_alignments(bamfile):
