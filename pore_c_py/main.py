@@ -1,29 +1,22 @@
 """Command-line interface."""
 import argparse
 import contextlib
+import itertools
 import logging
-import os
 from pathlib import Path
-import stat
 import sys
+import time
 
 import pysam
 
-from pore_c_py import annotate, writers
-from pore_c_py import digests
-from pore_c_py.annotate import update_header
-from pore_c_py.io import (
-    create_chunked_bam,
-    find_files
-)
-from pore_c_py.log import get_named_logger, log_level
+from pore_c_py import align_tools, annotate, digest, utils, writers
 
 
 def porec_parser():
     """Create CLI parser."""
     from pore_c_py import __version__
     parser = argparse.ArgumentParser(
-        "pore-c-py", parents=[log_level()],
+        "pore-c-py", parents=[utils.log_level()],
         description="Tools for processing Pore-C data.",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     subparsers = parser.add_subparsers(
@@ -52,9 +45,9 @@ def porec_parser():
             "processed so that each subread has the correct ML/MM tags. "
             "Note that the 'mv' SAM tag is not handled in the same way "
             "and is removed."),
-        parents=[log_level()],
+        parents=[utils.log_level()],
         formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-    digest_parse.set_defaults(func=digest)
+    digest_parse.set_defaults(func=digest_bam)
     digest_parse.add_argument(
         "input", type=Path,
         help="An unaligned BAM file or FASTQ file or a directory of same")
@@ -88,7 +81,7 @@ def porec_parser():
         description=(
             "Filter a BAM of concatemer-grouped monomer alignments, "
             "and add 'walk' tag."),
-        parents=[log_level()],
+        parents=[utils.log_level()],
         formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     annotate_parse.set_defaults(func=annotate_bam)
     annotate_parse.add_argument(
@@ -139,7 +132,7 @@ def porec_parser():
 
     chunk_bam_parse = subparsers.add_parser(
         "chunk-bam", help="Chunk a BAM into pieces.",
-        parents=[log_level()],
+        parents=[utils.log_level()],
         formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     chunk_bam_parse.set_defaults(func=chunk_bam)
     chunk_bam_parse.add_argument(
@@ -149,7 +142,7 @@ def porec_parser():
         "output_prefix", type=Path,
         help="An unaligned BAM file with a separate record for each monomer")
     chunk_bam_parse.add_argument(
-        "chunk_size", type=int,
+        "--chunk_size", type=int, default=8000,
         help="The number of reads in each chunk"),
     chunk_bam_parse.add_argument(
         "--recursive", default=False, action="store_true",
@@ -160,34 +153,25 @@ def porec_parser():
         "--glob", default="*.fastq",
         help="If INPUT is a directory use this glob to search for files")
     chunk_bam_parse.add_argument(
-        "max_reads", type=int, default=0,
+        "--max_reads", type=int,
         help="Take the first n reads (useful for testing)")
 
     return parser
 
 
-def stdout_is_regular_file() -> bool:
-    """
-    Detect if standard output is a regular file (or say a pipe).
-
-    :return: True if stdout is a regular file, else False.
-    """
-    mode = os.fstat(sys.stdout.buffer.fileno()).st_mode
-    return stat.S_ISREG(mode)
-
-
-def digest(args):
+def digest_bam(args):
     """Digest entry point."""
-    logger = get_named_logger("Digest")
+    logger = utils.get_named_logger("Digest")
     logger.info(f"Digesting concatemers from {args.input}.")
     input_files = list(
-        find_files(
+        utils.find_files(
             args.input, glob=args.glob, recursive=args.recursive))
     with pysam.AlignmentFile(
             str(input_files[0]), "r", check_sq=False) as inputfile:
-        header = update_header(inputfile.header)
+        header = align_tools.update_header(inputfile.header)
     mode = "wb"
-    if (args.output is not sys.stdout) and (not stdout_is_regular_file()):
+    if (args.output is not sys.stdout) and \
+            (not utils.stdout_is_regular_file()):
         mode = "wb0"
     with pysam.AlignmentFile(
             args.output, header=header,
@@ -195,7 +179,7 @@ def digest(args):
         for input_file in input_files:
             with pysam.AlignmentFile(
                     str(input_file), "r", check_sq=False) as inputfile:
-                for monomer in digests.get_concatemer_seqs(
+                for monomer in digest.get_concatemer_seqs(
                     inputfile, enzyme=args.enzyme,
                         remove_tags=args.remove_tags):
                     outbam.write(monomer)
@@ -204,7 +188,7 @@ def digest(args):
 
 def annotate_bam(args):
     """Parse BAM entry point."""
-    logger = get_named_logger("AnntateBAM")
+    logger = utils.get_named_logger("AnntateBAM")
     logger.info(f"Processing reads from {args.bam}")
     if all(
         x is False for x in (
@@ -232,7 +216,7 @@ def annotate_bam(args):
         manager.enter_context(inbam)
 
         if args.monomers:
-            header = annotate.update_header(inbam.header)
+            header = align_tools.update_header(inbam.header)
             outbam = pysam.AlignmentFile(
                 namesorted_bam, "wb", header=header, threads=args.threads)
             manager.enter_context(outbam)
@@ -259,18 +243,55 @@ def annotate_bam(args):
 
 def chunk_bam(args):
     """Create chunked ubam."""
-    logger = get_named_logger()
-    input_files = list(find_files(
-        input, glob=args.glob, recursive=args.recursive))
+    logger = utils.get_named_logger("ChunkedBAM")
+    input_files = list(utils.find_files(
+        args.input, glob=args.glob, recursive=args.recursive))
     if len(input_files) == 0:
         logger.error("No input files found at {args.input}")
-    else:
-        if args.output_prefix.is_dir():
-            args.output_prefix = args.output_prefix / "chunked"
-        output_files = create_chunked_bam(
-            input_files, args.output_prefix, args.chunk_size,
-            max_reads=args.max_reads)
-        logger.info(f"Wrote {len(output_files)} chunks")
+        sys.exit(1)
+
+    if args.output_prefix.is_dir():
+        args.output_prefix = args.output_prefix / "chunked"
+
+    with pysam.AlignmentFile(
+            str(input_files[0]), "r", check_sq=False) as inbam:
+        header = align_tools.update_header(inbam.header)
+
+    read_stream = itertools.chain(
+        *(pysam.AlignmentFile(str(x), check_sq=False) for x in input_files))
+    if args.max_reads is not None:
+        read_stream = itertools.islice(read_stream, args.max_reads)
+
+    def _new_file(index, bam):
+        if bam is not None:
+            bam.close()
+        return index + 1, pysam.AlignmentFile(
+            str(args.output_prefix.with_suffix(f".batch_{index}.bam")),
+            mode="wb", header=header)
+
+    def _log_time(start, index):
+        elapsed = time.perf_counter() - start
+        reads_per_minute = int(args.chunk_size * 60 / elapsed)
+        logger.info(
+            f"Wrote batch {index}: {reads_per_minute} reads/min.")
+        return time.perf_counter()
+
+    bam = None
+    index, written = 0, 0
+    start = time.perf_counter()
+    for align in read_stream:
+        if written == 0:
+            index, bam = _new_file(index, bam)
+        bam.write(align)
+        written += 1
+        if written % args.chunk_size == 0:
+            written = 0
+            start = _log_time(start, index)
+    if written != 0:
+        _log_time(start, index)
+    if bam is not None:
+        bam.close()
+    logger.info("Finished repacking BAMs.")
 
 
 def run_main():

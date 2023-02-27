@@ -1,7 +1,10 @@
 """Log."""
 import argparse
 import logging
+import os
 from pathlib import Path
+import stat
+import sys
 
 
 def log_level():
@@ -32,3 +35,24 @@ def get_named_logger(name):
     logger = logging.getLogger('{}.{}'.format(__package__, name))
     logger.name = name
     return logger
+
+
+def find_files(root: Path, glob="*.fastq", recursive=True):
+    """Find files."""
+    if not root.is_dir():
+        yield root
+    else:
+        if recursive and not glob.startswith("**/"):
+            glob = f"**/{glob}"
+        for f in root.glob(glob):
+            yield (f)
+
+
+def stdout_is_regular_file() -> bool:
+    """
+    Detect if standard output is a regular file (or say a pipe).
+
+    :return: True if stdout is a regular file, else False.
+    """
+    mode = os.fstat(sys.stdout.buffer.fileno()).st_mode
+    return stat.S_ISREG(mode)

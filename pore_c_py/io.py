@@ -1,11 +1,9 @@
 """IO."""
 from collections import Counter, defaultdict
 from dataclasses import dataclass, fields
-from itertools import chain, islice
+from itertools import chain
 import json
 from pathlib import Path
-import sys
-import time
 from typing import (
     Dict,
     Iterable,
@@ -20,17 +18,14 @@ from typing import (
 
 import pyarrow as pa
 import pyarrow.parquet as pq
-from pysam import AlignmentFile, AlignmentHeader, FastaFile, FastxFile
+from pysam import AlignmentFile, AlignmentHeader, FastxFile
 
 from pore_c_py.aligns import get_pairs, group_colinear, PairedMonomers
-from pore_c_py.log import get_named_logger
 from pore_c_py.model import ConcatemerReadSeq, MonomerReadSeq, ReadSeq
 from pore_c_py.sam_utils import downgrade_mm_tag, pysam_verbosity, SamFlags
 from pore_c_py.settings import (
     DEFAULT_ALIGN_HEADER,
     DOWNGRADE_MM,
-    EXE_NAME,
-    VERSION
 )
 
 T = TypeVar("T", ReadSeq, ConcatemerReadSeq, MonomerReadSeq)
@@ -600,119 +595,9 @@ def iter_reads(
             yield ReadSeq.from_fastq(rec, remove_tags=remove_tags)
 
 
-def find_files(
-    root: Path, glob: str = "*.fastq", recursive: bool = True
-) -> Iterable[Path]:
-    """Find files."""
-    if not root.is_dir():
-        yield root
-    else:
-        if recursive and not glob.startswith("**/"):
-            glob = f"**/{glob}"
-        for f in root.glob(glob):
-            yield (f)
-
-
-def get_alignment_header(
-    *,
-    source_files: Optional[List[Path]] = None,
-    reference_fasta: Optional[Path] = None,
-    add_pg: bool = True,
-) -> AlignmentHeader:
-    """Get alignment header."""
-    logger = get_named_logger("AlnHeader")
-    # TODO: add tests for this
-    data = {}
-    if source_files:
-        bams = [f for f in source_files if f.suffix in SAM_EXTS]
-        if len(bams) >= 1:
-            with pysam_verbosity(0):
-                source_header = AlignmentFile(
-                    str(bams[0]), check_sq=False).header
-            data = {**data, **source_header.to_dict()}
-            if len(bams) > 1:
-                logger.warning(
-                    f"BAM header derived from first BAM only: {bams[0]}")
-        else:
-            pass
-    if reference_fasta:
-        ff = FastaFile(str(reference_fasta))
-        header = AlignmentHeader.from_references(
-            list(ff.references), list(ff.lengths))
-        data = {**data, **header.to_dict()}
-
-    if add_pg:
-        _pg = data.pop("PG", [])
-        pg_data = {
-            "ID": f"{EXE_NAME}-{len(_pg) + 1}",
-            "PN": EXE_NAME,
-            "VN": VERSION,
-            "CL": " ".join(sys.argv),
-        }
-        if len(_pg) > 0:
-            if "ID" in _pg[-1]:
-                pg_data["PP"] = _pg[-1]["ID"]
-        _pg.append(pg_data)
-        data["PG"] = _pg
-
-    if not data:
-        header = DEFAULT_ALIGN_HEADER
-    else:
-        header = AlignmentHeader.from_dict(data)
-
-    return header
-
-
 def fastq_to_ubam(source_fastqs: List[Path], output_ubam: Path) -> Path:
     """Fastq to ubam."""
     writer = SamWriter(output_ubam)
     src = [iter_reads(s) for s in source_fastqs]
     writer.consume(chain(*src))
     return output_ubam
-
-
-# taken from recipe at https://docs.python.org/3/library/itertools.html
-def batched(iterable, n):
-    """Batch data into lists of length n. The last batch may be shorter."""
-    # batched('ABCDEFG', 3) --> ABC DEF G
-    if n < 1:
-        raise ValueError("n must be at least one")
-    it = iter(iterable)
-    while batch := list(islice(it, n)):
-        yield batch
-
-
-def create_chunked_bam(
-    input_files: List[Path],
-    output_prefix: Path,
-    chunk_size: int,
-    max_reads: Optional[int] = None,
-) -> List[Tuple[Path, int]]:
-    """Create chunked bam."""
-    logger = get_named_logger("ChunkBAM")
-    header = get_alignment_header(source_files=input_files)
-    output = []
-    with pysam_verbosity(0):
-        read_stream = chain(
-            *(AlignmentFile(str(_), check_sq=False) for _ in input_files)
-        )
-        if max_reads:
-            read_stream = islice(read_stream, max_reads)
-
-        for batch_idx, reads in enumerate(batched(read_stream, chunk_size)):
-            outfile = output_prefix.with_suffix(f".batch_{batch_idx}.bam")
-            counter = 0
-            start = time.perf_counter()
-            with AlignmentFile(
-                    str(outfile), mode="wb", header=header) as writer:
-                for read in reads:
-                    writer.write(read)
-                    counter += 1
-            elapsed = time.perf_counter() - start
-            reads_per_minute = int(counter * 60 / elapsed)
-            logger.info(
-                f"Wrote batch {batch_idx}: {counter} reads "
-                f"[{reads_per_minute:,d} reads/min]"
-            )
-            output.append((outfile, counter))
-    return output

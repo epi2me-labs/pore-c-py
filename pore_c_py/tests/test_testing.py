@@ -11,8 +11,7 @@ from pore_c_py.testing import (
     random_concatemer_generator,
     Scenario,
     simulate_concatemers,
-    simulate_contact_prob_matrix,
-    simulate_sequence_with_cut_sites
+    simulate_contact_prob_matrix
 )
 
 
@@ -38,23 +37,6 @@ def test_assign_snps_to_fragments(pos, buffer, snps, offset, fragments):
     assert _snps == snps
     assert _offset == offset
     assert _fragments == fragments
-
-
-def test_simulate_sequence_with_cut_sites():
-    """Test simulate sequence with cut sites."""
-    cutter = EnzymeCutter.from_name("EcoRI")
-    enzyme = cutter.enzyme
-    site = enzyme.site
-
-    expected = [10]
-
-    observed, seq = simulate_sequence_with_cut_sites(
-        seq_length=20,
-        random_state=default_rng(421),
-        cut_sites=expected,
-    )
-    assert expected == observed
-    assert site in seq
 
 
 def test_simulate_concatemer(default_scenario: Scenario):

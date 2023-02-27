@@ -4,7 +4,7 @@ import copy
 from Bio import Restriction
 from Bio.Seq import Seq
 
-from pore_c_py.log import get_named_logger
+from pore_c_py.utils import get_named_logger
 
 logger = get_named_logger("Digest")
 
@@ -63,8 +63,7 @@ def get_subread(align, start, end):
     return seq, qual, mm_str, ml_str
 
 
-def splits_to_intervals(
-        positions, length):
+def splits_to_intervals(positions, length):
     """Split to intervals."""
     if len(positions) == 0:
         return [(0, length)]
@@ -74,7 +73,7 @@ def splits_to_intervals(
     if positions[-1] != length:
         suffix = [length]
     breaks = prefix + positions + suffix
-    return [(start, end-1) for start, end in zip(breaks[:-1], breaks[1:])]
+    return [(start, end) for start, end in zip(breaks[:-1], breaks[1:])]
 
 
 def get_enzyme(enzyme):
@@ -107,22 +106,19 @@ def get_concatemer_seqs(input_file, enzyme, remove_tags):
     tags_remove = {"Ml", "ML", "Mm", "MM", "mv"}
     if remove_tags:
         tags_remove.update(set(remove_tags))
-    for i in input_file.fetch(until_eof=True):
+    for align in input_file.fetch(until_eof=True):
         n_concatemers += 1
-        concatemer_id = i.query_name
-        cut_points = enzyme.search(Seq(i.query_sequence))
-        read_length = len(i.query_sequence)
+        concatemer_id = align.query_name
+        cut_points = [x - 1 for x in enzyme.search(Seq(align.query_sequence))]
+        read_length = len(align.query_sequence)
         num_digits = len(str(read_length))
         intervals = splits_to_intervals(cut_points, read_length)
         num_intervals = len(intervals)
         for idx, (start, end) in enumerate(intervals):
             n_monomers += 1
-            read = copy.copy(i)
+            read = copy.copy(align)
             seq, qual, mm_str, ml_str = get_subread(
-                    align=i,
-                    start=start,
-                    end=end
-                )
+                align=align, start=start, end=end)
             for item in tags_remove:
                 read.set_tag(item, None)
             read.query_sequence = seq
