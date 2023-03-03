@@ -18,6 +18,7 @@ from typing import (
 
 import pyarrow as pa
 import pyarrow.parquet as pq
+import pysam
 from pysam import AlignmentFile, AlignmentHeader, FastxFile
 
 from pore_c_py.aligns import get_pairs, group_colinear, PairedMonomers
@@ -248,7 +249,7 @@ class PairedEndWriter(SamWriter):
 
     def write_records(
         self, recs=List[PairedMonomers],
-        fail_aligns=Optional[List[MonomerReadSeq]]
+        fail_aligns=Optional[pysam.AlignedSegment]
     ):
         """Write records."""
         for (left, right, pair_data) in recs:

@@ -1,11 +1,58 @@
 """Collection of file writers."""
+import collections
+import json
 from typing import List
 
 import pyarrow as pa
 import pyarrow.parquet as pq
 import pysam
 
-from pore_c_py import align_tools
+from pore_c_py import align_tools, utils
+
+
+class StatsWriter:
+    """Stats writer."""
+
+    def __init__(self, path):
+        """Init."""
+        self.path = path
+        self.concatemer_count = 0
+        self.cardinality_count = collections.Counter()
+        self.pair_count = collections.Counter()
+        self.cis_trans = collections.Counter()
+
+    def append(self, pair):
+        """Write records."""
+        self.concatemer_count += 1
+        cardinality = utils.ConcatemerData.from_pysam(pair.left).subread_idx
+        if cardinality in self.cardinality_count.keys():
+            self.cardinality_count[cardinality] += 1
+        else:
+            self.cardinality_count[cardinality] = 1
+        self.pair_count[pair.state.name] += 1
+        if pair.state == align_tools.PairState.both:
+            if pair.left.reference_name == pair.right.reference_name:
+                self.cis_trans["cis"] += 1
+            else:
+                self.cis_trans["trans"] += 1
+
+    def close(self):
+        """Close."""
+        d = {
+            "cardinality": self.cardinality_count,
+            "pair_count": self.pair_count,
+            "cis_trans": self.cis_trans
+        }
+        with self.path.open("w") as fh:
+            fh.write(json.dumps(d))
+
+    def __enter__(self):
+        """Enter context."""
+        pass
+
+    def __exit__(self, exc_type, exc_value, exc_traceback):
+        """Exit context, closing json file."""
+        self.close()
 
 
 class ChromunityWriter:

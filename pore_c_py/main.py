@@ -120,15 +120,31 @@ def porec_parser():
         "--paired_end", default=False, action="store_true",
         help="Create a mock paired-end BAM")
     annotate_parse.add_argument(
-        "--paired_end_minimum_distance", type=int,
+        "--filter_pairs", action="store_true",
+        help=(
+            "Filter out pairs using min and max distance"))
+    annotate_parse.add_argument(
+        "--paired_end_minimum_distance", default=0, type=int,
         help=(
             "Filter out any pairs shorter than this distance."
             "Note setting this removes all trans pairs."))
     annotate_parse.add_argument(
-        "--paired_end_maximum_distance", type=int,
+        "--paired_end_maximum_distance", default=float("inf"), type=int,
         help=(
             "Filter out any pairs longer than this distance. "
             "Note setting this removes all trans pairs."))
+    annotate_parse.add_argument(
+        "--allow_singletons", default=False, action="store_true",
+        help=(
+            "If filter pairs is true, allow singletons in paired end bam"))
+    annotate_parse.add_argument(
+        "--allow_improper", default=False, action="store_true",
+        help=(
+            "If filter pairs is true, allow improper pairs in paired end bam"))
+    annotate_parse.add_argument(
+        "--allow_unmapped", default=False, action="store_true",
+        help=(
+            "If filter pairs is true, allow unmapped in paired end bam"))
 
     chunk_bam_parse = subparsers.add_parser(
         "chunk-bam", help="Chunk a BAM into pieces.",
@@ -225,6 +241,13 @@ def annotate_bam(args):
                 chromunity_parquet,
                 merge_distance=args.chromunity_merge_distance)
             manager.enter_context(chrom_writer)
+        if args.paired_end:
+            pairs_bam = pysam.AlignmentFile(
+                paired_end_bam, "wb", header=header, threads=args.threads)
+            manager.enter_context(pairs_bam)
+        if args.summary:
+            summary = writers.StatsWriter(summary_json)
+            manager.enter_context(summary)
 
         for concat_walk in annotate.annotate_alignments(inbam):
             if args.monomers:
@@ -233,11 +256,20 @@ def annotate_bam(args):
             if args.chromunity:
                 chrom_writer.write(concat_walk)
             if args.summary or args.paired_end:
-                # make pairs, send to writers.
-                if args.summary:
-                    pass
-                if args.paired_end:
-                    pass
+                pairs = align_tools.get_pairs(concat_walk, args.direct_only)
+                if args.filter_pairs:
+                    pairs = align_tools.filter_pairs(
+                        pairs,
+                        allow_singletons=args.allow_singletons,
+                        allow_improper=args.allow_improper,
+                        allow_unmapped=args.allow_unmapped)
+                for p in pairs:
+                    if args.paired_end:
+                        pairs_bam.write(p.left)
+                        if p.right is not None:
+                            pairs_bam.write(p.right)
+                    if args.summary:
+                        summary.append(p)
     logger.info("Finished BAM parsing.")
 
 
