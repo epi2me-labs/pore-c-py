@@ -1,10 +1,13 @@
 """Log."""
 import argparse
+from dataclasses import dataclass
 import logging
 import os
 from pathlib import Path
 import stat
 import sys
+
+import pysam
 
 
 def log_level():
@@ -56,3 +59,35 @@ def stdout_is_regular_file() -> bool:
     """
     mode = os.fstat(sys.stdout.buffer.fileno()).st_mode
     return stat.S_ISREG(mode)
+
+
+@dataclass
+class ConcatemerData:
+    """Concateer Data."""
+
+    concatemer_id: str
+    start: int
+    end: int
+    read_length: int
+    subread_idx: int
+    subread_total: int
+
+    @classmethod
+    def from_pysam(cls, align: pysam.AlignedSegment):
+        """Extract concatemer meta information from alignment."""
+        cls.concatemer_id = align.get_tag('MI')
+        tags = align.get_tag('Xc')
+        cls.start = tags[0]
+        cls.end = tags[1]
+        cls.read_length = tags[2]
+        cls.subread_idx = tags[3]
+        cls.subread_total = tags[4]
+        return cls
+
+    def to_pysam(self, align: pysam.AlignedSegment):
+        """Set concatemer metadata on alignment."""
+        align.set_tag('MI', self.concatemer_id)
+        align.set_tag('Xc', [
+            self.start, self.end, self.read_length,
+            self.subread_idx, self.subread_total])
+        return align
