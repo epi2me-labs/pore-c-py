@@ -14,13 +14,15 @@ develop: venv/bin/activate
 	${IN_VENV} && python setup.py develop
 
 test: venv/bin/activate
-	${IN_VENV} && pip install 'flake8<6.0.0' flake8-rst-docstrings flake8-docstrings flake8-import-order flake8-forbid-visual-indent pytest
+	${IN_VENV} && pip install 'flake8<6.0.0' flake8-rst-docstrings flake8-docstrings flake8-import-order flake8-forbid-visual-indent pytest pytest-cov
 	${IN_VENV} && flake8 ${PROJECT} \
 		--import-order-style google --application-import-names ${PROJECT} \
 		--statistics
 	# demo should run without error
 	${IN_VENV} && python setup.py install
-	${IN_VENV} && pytest pore_c_py/tests
+	${IN_VENV} && pytest tests \
+	    --cov pore_c_py --cov-report html --cov-report term \
+		--cov-report term-missing --cov-fail-under 15
 
 IN_BUILD=. ./pypi_build/bin/activate
 pypi_build/bin/activate:
