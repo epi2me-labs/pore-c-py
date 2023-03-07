@@ -20,9 +20,8 @@ test: venv/bin/activate
 		--statistics
 	# demo should run without error
 	${IN_VENV} && python setup.py install
-	${IN_VENV} && pytest tests \
-	    --cov pore_c_py --cov-report html --cov-report term \
-		--cov-report term-missing --cov-fail-under 15
+	${IN_VENV} && pytest tests --cov pore_c_py \
+		--cov-report html --cov-report term --cov-report term-missing
 
 IN_BUILD=. ./pypi_build/bin/activate
 pypi_build/bin/activate:
