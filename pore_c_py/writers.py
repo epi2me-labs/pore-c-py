@@ -24,7 +24,7 @@ class StatsWriter:
     def append(self, pair):
         """Write records."""
         self.concatemer_count += 1
-        cardinality = utils.ConcatemerData.from_pysam(pair.left).subread_idx
+        cardinality = utils.MonomerData.from_pysam(pair.left).subread_idx
         if cardinality in self.cardinality_count.keys():
             self.cardinality_count[cardinality] += 1
         else:
@@ -77,7 +77,7 @@ class ChromunityWriter:
 
         def _aln_to_record(aln):
             return {
-                "cid": aln.get_tag("MI"),
+                "cid": aln.get_tag(utils.CONCATEMER_ID_TAG),
                 "chrom": aln.reference_name,
                 "start": aln.reference_start,
                 "end": aln.reference_end,

@@ -61,8 +61,13 @@ def stdout_is_regular_file() -> bool:
     return stat.S_ISREG(mode)
 
 
+CONCATEMER_ID_TAG = "MI"
+MONOMER_DATA_TAG = "Xc"
+WALK_TAG = "Xw"
+
+
 @dataclass
-class ConcatemerData:
+class MonomerData:
     """Concateer Data."""
 
     concatemer_id: str
@@ -75,8 +80,8 @@ class ConcatemerData:
     @classmethod
     def from_pysam(cls, align: pysam.AlignedSegment):
         """Extract concatemer meta information from alignment."""
-        cls.concatemer_id = align.get_tag('MI')
-        tags = align.get_tag('Xc')
+        cls.concatemer_id = align.get_tag(CONCATEMER_ID_TAG)
+        tags = align.get_tag(MONOMER_DATA_TAG)
         cls.start = tags[0]
         cls.end = tags[1]
         cls.read_length = tags[2]
@@ -86,8 +91,17 @@ class ConcatemerData:
 
     def to_pysam(self, align: pysam.AlignedSegment):
         """Set concatemer metadata on alignment."""
-        align.set_tag('MI', self.concatemer_id)
-        align.set_tag('Xc', [
+        align.set_tag(CONCATEMER_ID_TAG, self.concatemer_id)
+        align.set_tag(MONOMER_DATA_TAG, [
             self.start, self.end, self.read_length,
             self.subread_idx, self.subread_total])
         return align
+
+    @staticmethod
+    def set_monomer_data(
+            align: pysam.AlignedSegment,
+            start, end, read_length, idx, num_intervals):
+        """Set the monomer data on an alignment."""
+        align.set_tag(
+            MONOMER_DATA_TAG,
+            [start, end, read_length, idx, num_intervals])

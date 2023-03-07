@@ -4,9 +4,9 @@ import copy
 from Bio import Restriction
 from Bio.Seq import Seq
 
-from pore_c_py.utils import get_named_logger
+from pore_c_py import utils
 
-logger = get_named_logger("Digest")
+logger = utils.get_named_logger("Digest")
 
 
 def get_subread(align, start, end):
@@ -126,9 +126,9 @@ def get_concatemer_seqs(input_file, enzyme, remove_tags):
             # lexograpically sortable monomer ID
             read.query_name = \
                 f"{concatemer_id}:{start:0{num_digits}d}:{end:0{num_digits}d}"
-            read.set_tag(
-                "Xc", [start, end, read_length, idx, num_intervals])
-            read.set_tag("MI", concatemer_id, "Z")
+            utils.MonomerData.set_monomer_data(
+                read, [start, end, read_length, idx, num_intervals])
+            read.set_tag(utils.CONCATEMER_ID_TAG, concatemer_id, "Z")
             read.set_tag("MM", mm_str)
             read.set_tag("ML", ml_str)
             yield read
