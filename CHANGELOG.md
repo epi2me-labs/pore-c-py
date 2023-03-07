@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Simplified logging for easier parsing.
 - Rewrote CLI, removing utils and keeping only those programs which are used.
 ### Removed
-- A lot of code.
+- A lot of code and dependencies.
 
 ## [v1.0.0]
 ### Changed

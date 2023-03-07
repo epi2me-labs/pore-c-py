@@ -1,10 +1,4 @@
 # pore_c_py requirements
-typer==0.6.1
 biopython==1.79
-polars==0.14.0
-attrs==22.1.0
 pyarrow==11.0.0  # installs on macOS
-cattrs
-mappy==2.24
 pysam==0.20.0 
-numpy
