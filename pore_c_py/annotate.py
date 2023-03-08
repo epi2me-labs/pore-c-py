@@ -8,7 +8,7 @@ logger = utils.get_named_logger("AnntateAln")
 
 def get_walk_component(monomer):
     """Get monomer tag."""
-    monomer_data = utils.MonomerData(monomer)
+    monomer_data = utils.MonomerData.from_pysam(monomer)
     if monomer.is_unmapped:
         monomer_name = (
             f"*:"
