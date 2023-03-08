@@ -127,7 +127,7 @@ def get_concatemer_seqs(input_file, enzyme, remove_tags):
             read.query_name = \
                 f"{concatemer_id}:{start:0{num_digits}d}:{end:0{num_digits}d}"
             utils.MonomerData.set_monomer_data(
-                read, [start, end, read_length, idx, num_intervals])
+                read, start, end, read_length, idx, num_intervals)
             read.set_tag(utils.CONCATEMER_ID_TAG, concatemer_id, "Z")
             read.set_tag("MM", mm_str)
             read.set_tag("ML", ml_str)
