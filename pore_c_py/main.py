@@ -218,6 +218,10 @@ def annotate_bam(args):
             "You must specify at least one of --monomers, --chromunity, "
             "--summary, or --paired_end")
         sys.exit(1)
+    paired_end_bam = Path(f"{args.output_prefix}.pe.bam")
+    summary_json = Path(f"{args.output_prefix}.summary.json")
+    chromunity_parquet = Path(f"{args.output_prefix}.chromunity.parquet")
+    outputs = [paired_end_bam, summary_json, chromunity_parquet]
     mode = "wb"
     if args.stdout:
         namesorted_bam = sys.stdout
@@ -225,12 +229,7 @@ def annotate_bam(args):
             mode = "wb0"
     else:
         namesorted_bam = Path(f"{args.output_prefix}.ns.bam")
-    paired_end_bam = Path(f"{args.output_prefix}.pe.bam")
-    summary_json = Path(f"{args.output_prefix}.summary.json")
-    chromunity_parquet = Path(f"{args.output_prefix}.chromunity.parquet")
-    outputs = (
-        namesorted_bam, paired_end_bam, summary_json, chromunity_parquet)
-
+        outputs += namesorted_bam
     if any(x.exists() for x in outputs) and not args.force:
         logger.error(
             "Some of the outputs exist, please remove before continuing.")
