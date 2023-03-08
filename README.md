@@ -22,7 +22,9 @@ usage: pore_c_py [OPTIONS] COMMAND [ARGS].
 
 Available subcommands are:
     digest       Digest concatemer sequences into monomers using a restriction enzyme.      
-    parse-bam    Parse a BAM file of aligned monomers.
+    annotate     Annotate alignments with a "walk", which simply
+                 enumerates the alignment coordinates of the monomers comprising the
+                 concatemer.
 ```
 
 ### Examples
@@ -34,6 +36,6 @@ pore-c-py digest <input concatemers bam> <restriction enzyme> <output monomers b
 
 *Parse a bam of aligned monomers:*
 ```
-pore-c-py parse-bam <input bam> <output bam file name>
+pore-c-py annotate <input bam> <output bam file name>
 ```
 
