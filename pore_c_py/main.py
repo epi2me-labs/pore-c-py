@@ -95,6 +95,9 @@ def porec_parser():
         "output_prefix", type=Path,
         help="Output files will share this prefix")
     annotate_parse.add_argument(
+        "--stdout", default=False,
+        help="If True output name sorted bam to stdout")
+    annotate_parse.add_argument(
         "--threads", default=1, type=int,
         help="Compute threads of bam compression.")
     annotate_parse.add_argument(
@@ -215,8 +218,13 @@ def annotate_bam(args):
             "You must specify at least one of --monomers, --chromunity, "
             "--summary, or --paired_end")
         sys.exit(1)
-
-    namesorted_bam = Path(f"{args.output_prefix}.ns.bam")
+    mode = "wb"
+    if args.stdout:
+        namesorted_bam = sys.stdout
+        if not utils.stdout_is_regular_file():
+            mode = "wb0"
+    else:
+        namesorted_bam = Path(f"{args.output_prefix}.ns.bam")
     paired_end_bam = Path(f"{args.output_prefix}.pe.bam")
     summary_json = Path(f"{args.output_prefix}.summary.json")
     chromunity_parquet = Path(f"{args.output_prefix}.chromunity.parquet")
@@ -236,7 +244,7 @@ def annotate_bam(args):
         if args.monomers:
             header = align_tools.update_header(inbam.header)
             outbam = pysam.AlignmentFile(
-                namesorted_bam, "wb", header=header, threads=args.threads)
+                namesorted_bam, mode=mode, header=header, threads=args.threads)
             manager.enter_context(outbam)
         if args.chromunity:
             chrom_writer = writers.ChromunityWriter(
