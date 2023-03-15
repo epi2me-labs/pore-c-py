@@ -34,7 +34,7 @@ about:
   license: Mozilla Public License 2.0 
   license_family: OTHER
   license_file: LICENSE.md
-  summary: "eCharts plotting API"
+  summary: "Python scripts for working with Pore-C data"
   doc_url: https://github.com/epi2me-labs/pore-c-py
   dev_url: https://github.com/epi2me-labs/pore-c-py
 
