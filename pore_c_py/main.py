@@ -176,6 +176,9 @@ def porec_parser():
     chunk_bam_parse.add_argument(
         "--max_reads", type=int,
         help="Take the first n reads (useful for testing)")
+    chunk_bam_parse.add_argument(
+        "--threads", default=1, type=int,
+        help="Compute threads of bam compression.")
 
     return parser
 
@@ -308,7 +311,7 @@ def chunk_bam(args):
             bam.close()
         return index + 1, pysam.AlignmentFile(
             str(args.output_prefix.with_suffix(f".batch_{index}.bam")),
-            mode="wb", header=header)
+            threads=args.threads, mode="wb", header=header)
 
     def _log_time(start, index):
         elapsed = time.perf_counter() - start
