@@ -59,6 +59,10 @@ def test_is_colinear(left, right, tol, expected):
             [("chr1", 0, 8, "+"), ("chr1", 8, 9, "."), ("chr1", 20, 30, "+")],
             [[0], [1], [2]],
         ],
+        [
+            [("chr1", 0, 8, "+"), ("chr1", 8, 9, ".")],
+            [[0], [1]],
+        ]
     ],
 )
 def test_group_colinear(aligns, expected):
@@ -71,24 +75,35 @@ def test_group_colinear(aligns, expected):
     assert res == exp
 
 
-# @pytest.mark.parametrize(
-#     "left,right,expected",
-#     [
-#         (("+", 0, 5), ("+", 10, 15), 5),  # span 5-10
-#         (("-", 10, 15), ("-", 0, 5), -5),  # span 5-10
-#         (("-", 0, 5), ("+", 10, 15), 10),  # span 0-10
-#         (("-", 10, 15), ("+", 0, 5), -10),  # span 0-10
-#         (("+", 0, 5), ("-", 10, 15), 10),  # span 5-15
-#         (("+", 10, 15), ("-", 0, 5), -10),  # span 5-15
-#         (("-", 0, 5), ("-", 10, 15), 15),  # span 0-15
-#         (("+", 10, 15), ("+", 0, 5), -15),  # span 0-15
-#     ],
-# )
-# def test_genomic_distance(left, right, expected):
-#     """Test genomic distance."""
-#     assert calculate_genomic_distance(left, right) == expected
-#
-#
+@pytest.mark.parametrize(
+    "left,right,expected",
+    [   # overlapping
+        (("chr1", 0, 5, "+"), ("chr1", 2, 15, "+"), 0),
+        # not overlapping
+        (("chr1", 0, 5, "+"), ("chr1", 10, 15, "+"), 5),
+        (("chr1", 10, 15, "-"), ("chr1", 0, 5, "+"), 5),
+        (("chr1", 0, 5, "-"), ("chr1", 10, 15, "+"), 5),
+        (("chr1", 10, 15, "-"), ("chr1", 0, 5, "+"), 5),
+        (("chr1", 0, 10, "+"), ("chr1", 11, 15, "-"), 1),
+        (("chr1", 0, 5, "+"), ("chr1", 10, 15, "-"), 5),
+        (("chr1", 10, 15, "+"), ("chr1", 0, 5, "-"), 5),
+        (("chr1", 0, 5, "-"), ("chr1", 10, 15, "-"), 5),
+        (("chr1", 10, 15, "+"), ("chr1", 0, 5, "+"), 5),
+        # unmapped
+        (("chr1", 0, 10, "+"), ("chr1", 11, 15, "."), float("inf")),
+        (("chr1", 0, 10, "."), ("chr1", 11, 15, "."), float("inf")),
+
+    ],
+)
+def test_genomic_distance(left, right, expected):
+    """Test genomic distance."""
+
+    res = align_tools.genomic_distance(
+        align_from_tuple(left), align_from_tuple(right))
+    assert res == expected
+
+
+
 # def test_short_walk(m1, caplog):
 #     """Test short walk."""
 #     m1[2].read_seq.flags.secondary = True
