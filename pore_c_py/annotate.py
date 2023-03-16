@@ -6,22 +6,6 @@ from pore_c_py import utils
 logger = utils.get_named_logger("AnntateAln")
 
 
-def get_walk_component(monomer):
-    """Get monomer tag."""
-    monomer_data = utils.MonomerData.from_pysam(monomer)
-    if monomer.is_unmapped:
-        monomer_name = (
-            f"*:"
-            f"{monomer_data.start}-{monomer_data.end}")
-    else:
-        orientation = "+-"[monomer.is_reverse]
-        monomer_name = (
-            f"{monomer.reference_name}:{orientation}:"
-            f"{monomer.reference_start}-{monomer.reference_end}:"
-            f"{monomer_data.start}-{monomer_data.end}")
-    return monomer_name
-
-
 def sort_by_category(alns, monomer_id):
     """Sort by category."""
     reordered = list()
@@ -44,6 +28,28 @@ def sort_by_category(alns, monomer_id):
     yield from (x[0] for x in reordered)
 
 
+def get_walk(aligns):
+    """Get walk."""
+    n_monomers = 0
+    walk = list()
+    for monomer_id, alns in groupby(aligns, lambda x: x.query_name):
+        n_monomers += 1
+        sorted_aligns = sort_by_category(alns, monomer_id)
+        aln = next(sorted_aligns)
+        walk.append(aln)
+    expected_monomers = utils.MonomerData.get_subread_total(walk[-1])
+    if expected_monomers != len(walk):
+        concat_id = walk[-1].get_tag(utils.CONCATEMER_ID_TAG)
+        logger.warning(
+            f"Expected to see {expected_monomers} alignments for "
+            f"concatemer {concat_id}, found {len(walk)}"
+        )
+    walk_tag = ";".join(utils.MonomerData.from_pysam(aln).name for aln in walk)
+    for aln in walk:
+        aln.set_tag(utils.WALK_TAG, walk_tag)
+    return (walk, n_monomers)
+
+
 def annotate_alignments(bamfile):
     """Annotate (and filter) monomer alignments.
 
@@ -56,7 +62,7 @@ def annotate_alignments(bamfile):
     enumerates the alignment coordinates of the monomers comprising the
     concatemer.
     """
-    n_monomers = 0
+    total_monomers = 0
     seen = set()
     for concat_id, aligns in groupby(
             bamfile.fetch(until_eof=True),
@@ -66,22 +72,7 @@ def annotate_alignments(bamfile):
                 f"Input file appears unsorted, found {concat_id} "
                 "more than once.")
         seen.add(concat_id)
-        walk = list()
-        for monomer_id, alns in groupby(aligns, lambda x: x.query_name):
-            n_monomers += 1
-            sorted_aligns = sort_by_category(alns, monomer_id)
-            aln = next(sorted_aligns)
-            walk.append(aln)
-        expected_monomers = utils.MonomerData.from_pysam(
-            walk[-1]).subread_total
-        concat_id = walk[-1].get_tag(utils.CONCATEMER_ID_TAG)
-        if expected_monomers != len(walk):
-            logger.warning(
-                f"Expected to see {expected_monomers} alignments for "
-                f"concatemer {concat_id}, found {len(walk)}"
-            )
-        walk_tag = ";".join(get_walk_component(aln) for aln in walk)
-        for aln in walk:
-            aln.set_tag(utils.WALK_TAG, walk_tag)
+        walk, n_monomers = get_walk(aligns)
+        total_monomers += n_monomers
         yield walk
-    logger.info(f"Found {n_monomers} monomers in {len(seen)} concatemers.")
+    logger.info(f"Found {total_monomers} monomers in {len(seen)} concatemers.")

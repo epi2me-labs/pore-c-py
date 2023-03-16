@@ -1,5 +1,127 @@
 """Test functions from annotate."""
-# flake8: noqa
+import contextlib
+import pysam
+import pytest
+import os
+from pore_c_py import annotate, utils
+
+
+HEADER = pysam.AlignmentHeader.from_references(
+    ["chr1", "chr2"], [1000, 2000])
+
+
+def align_from_tuple(t, name="test", molecule_tag='unknown', walk_tag=None):
+    """Align from tuple."""
+    rec = pysam.AlignedSegment(header=HEADER)
+    rec.reference_id = ["chr1", "chr2"].index(t[0])
+    rec.reference_start = t[1]
+    rec.query_sequence = "A" * (t[2] - t[1])
+    rec.cigartuples = [(pysam.CMATCH, (t[2] - t[1]))]
+    rec.flag = 0
+    if t[3] == "-":
+        rec.flag |= pysam.FREVERSE
+    if t[3] == ".":
+        rec.flag |= pysam.FUNMAP
+    rec = utils.MonomerData(molecule_tag, t[4],  t[5], 0,0,0).to_pysam(rec)
+    rec.query_name = name
+    rec.set_tag(utils.WALK_TAG, walk_tag)
+    return rec
+
+
+def get_data_set(t, name="test", molecule_tag=None, walk_tag=None):
+    """Get data set with different categories."""
+    primary = align_from_tuple(t, name=name, molecule_tag=molecule_tag)
+    unmapped = align_from_tuple(t, name=name, molecule_tag=molecule_tag)
+    unmapped.is_unmapped = True
+    secondary = align_from_tuple(t, name=name, molecule_tag=molecule_tag)
+    secondary.is_secondary = True
+    supplementary = align_from_tuple(t, name=name, molecule_tag=molecule_tag)
+    supplementary.is_supplementary = True
+    alns = [primary, secondary, supplementary, unmapped]  
+    return (alns)
+
+
+@pytest.mark.parametrize(
+    "monomer,expected",
+    [
+        (("chr1", 0, 10, "+", 0, 10), "chr1:+:0-10:0-10"),
+        (("chr2", 0, 20, "-", 0, 10), "chr2:-:0-20:0-10"),
+        (("chr1", 0, 10, ".", 0, 10), "*:0-10"),
+    ],
+)
+def test_get_walk_component(monomer, expected):
+    """Test get monomer tag."""
+
+    res = utils.MonomerData.from_pysam(align_from_tuple(monomer)).name
+    assert res == expected
+
+
+@pytest.mark.parametrize(
+    "t",
+    [
+        (("chr1", 0, 10, "+", 0, 10))
+    ],
+)
+def test_sort_by_category(t):
+    """Test sort by category."""
+    alns = get_data_set(t)
+    primary = alns[0]
+    res = annotate.sort_by_category(alns, "test")
+    assert next(res) == primary
+
+
+@pytest.mark.parametrize(
+    "alns, expected_monomers, expected_tag",
+    [
+        ([("chr1", 0, 20, "+", 0, 10), ("chr1", 0, 5, "-", 0, 10)], 2,
+         'chr1:+:0-20:0-10;chr1:-:0-5:0-10'),
+        ([("chr1", 0, 10, "+", 0, 10), ("chr1", 9, 20, "+", 0, 20),
+          ("chr1", 0, 10, ".", 0, 10)], 3, 
+          "chr1:+:0-10:0-10;chr1:+:9-20:0-20;*:0-10")
+    ]
+)
+def test_get_walk(alns, expected_monomers, expected_tag):
+    """Test get walk."""
+    aligns = []
+    expected_walk = []
+    for i, t in enumerate(alns):
+        data_set = get_data_set(t, "test"+str(i), "test"+str(i))
+        expected_walk += [data_set[0]]
+        aligns += data_set
+    walk, n_monomers = annotate.get_walk(aligns)
+    assert walk == expected_walk
+    assert n_monomers == expected_monomers
+    assert walk[0].get_tag(utils.WALK_TAG) == expected_tag
+
+
+@pytest.mark.parametrize(
+    "alns, tag",
+    [(
+        [("chr1", 0, 20, "+", 0, 10),
+         ("chr1", 0, 5, "-", 0, 10)],
+        'chr1:+:0-20:0-10;chr1:-:0-5:0-10'),
+     (
+        [("chr1", 0, 20, "+", 0, 10),
+         ("chr1", 0, 0, ".", 0, 10),
+         ("chr1", 0, 10, "+", 0, 10)],
+        'chr1:+:0-20:0-10;*:0-10;chr1:+:0-10:0-10')]
+)
+def test_annotate_alignments(alns, tag, tmpdir):
+    """Test annotate alignments."""
+    aligns = []
+    expected_walk = []
+    for i, t in enumerate(alns):
+        data_set = get_data_set(t, "test"+str(i), "test")
+        expected_walk += [align_from_tuple(t, "test"+str(i), "test", tag)]
+        aligns += data_set
+    bam_path = os.path.join(str(tmpdir), 'ex1.bam')
+    with pysam.AlignmentFile(bam_path, mode='wb0', header=HEADER) as f:
+        for i in aligns:
+            f.write(i)
+    with pysam.AlignmentFile(bam_path, "r", check_sq=False) as inbam:
+        walks = list(annotate.annotate_alignments(inbam))
+        assert len(walks) == 1
+        assert walks[0] == expected_walk
 
 #@pytest.mark.parametrize(
 #    "start,end,read_length,expected",

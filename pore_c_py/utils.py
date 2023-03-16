@@ -65,10 +65,13 @@ CONCATEMER_ID_TAG = "MI"
 MONOMER_DATA_TAG = "Xc"
 WALK_TAG = "Xw"
 
+# NOTE: the class below exists only because we don't store individual bits in
+#       separate tags; which would be simpler and more direct to access.
+
 
 @dataclass
 class MonomerData:
-    """Concateer Data."""
+    """Concatemer Data."""
 
     concatemer_id: str
     start: int
@@ -87,6 +90,17 @@ class MonomerData:
         cls.read_length = tags[2]
         cls.subread_idx = tags[3]
         cls.subread_total = tags[4]
+
+        if align.is_unmapped:
+            cls.name = (
+                f"*:"
+                f"{cls.start}-{cls.end}")
+        else:
+            orientation = "+-"[align.is_reverse]
+            cls.name = (
+                f"{align.reference_name}:{orientation}:"
+                f"{align.reference_start}-{align.reference_end}:"
+                f"{cls.start}-{cls.end}")
         return cls
 
     def to_pysam(self, align: pysam.AlignedSegment):
@@ -105,3 +119,8 @@ class MonomerData:
         align.set_tag(
             MONOMER_DATA_TAG,
             [start, end, read_length, idx, num_intervals])
+
+    @staticmethod
+    def get_subread_total(align: pysam.AlignedSegment):
+        """Return the number of sibling monomers."""
+        return align.get_tag(MONOMER_DATA_TAG)[4]
