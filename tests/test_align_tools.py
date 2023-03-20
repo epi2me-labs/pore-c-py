@@ -103,6 +103,96 @@ def test_genomic_distance(left, right, expected):
     assert res == expected
 
 
+@pytest.mark.parametrize(
+    "left, right, expected_left_flags, expected_right_flags",
+    [
+        # Neither
+        (("chr1", 0, 5, "."), ("chr1", 0, 5, "."),
+         {"mate_is_unmapped": True}, {"mate_is_unmapped": True}),
+        # Both same ref
+        (("chr1", 0, 5, "+"), ("chr1", 10, 20, "-"),
+         {"is_proper_pair": True, "next_reference_name": "chr1",
+         "next_reference_start": 10, "template_length": 20},
+         {"is_proper_pair": True, "next_reference_name": "chr1",
+         'next_reference_start': 0, 'template_length': -20}),
+        # Both different ref
+        (("chr1", 0, 5, "+"), ("chr2", 10, 20, "+"),
+         {"is_proper_pair": False, "next_reference_name": "chr2",
+          "next_reference_start": 10},
+         {"is_proper_pair": False, "next_reference_name": "chr1",
+          "next_reference_start": 0}),
+        # right
+        (("chr1", 0, 5, "."), ("chr2", 10, 20, "+"),
+         {"mate_is_unmapped": False, "next_reference_name": "chr2",
+          "next_reference_start": 10},
+         {"mate_is_unmapped": True, "next_reference_name": None,
+          "next_reference_start": -1}),
+        # left
+        (("chr1", 0, 5, "+"),("chr2", 10, 20, "."),
+         {"mate_is_unmapped": True, "next_reference_name": None,
+         "next_reference_start": -1},
+         {"mate_is_unmapped": False, "next_reference_name": "chr1",
+         "next_reference_start": 0}),
+        # singleton
+        (("chr1", 0, 5, "+"), None, {}, {})
+    ],
+)
+def test_paired_segments(
+        left, right, expected_left_flags, expected_right_flags):
+    """Test paired segments class."""
+    if right is not None:
+        right = align_from_tuple(right)
+    left = align_from_tuple(left)
+    paired_segments = align_tools.PairedSegments(left, right)
+    for k, v in expected_left_flags.items():
+        assert getattr(paired_segments.left, k) == v
+    for k, v in expected_right_flags.items():
+        assert getattr(paired_segments.right, k) == v
+    if right is None:
+        assert paired_segments.state == align_tools.PairState.singleton
+        assert paired_segments.right is None
+
+
+@pytest.mark.parametrize(
+    "aligns,  direct, expected, expected_segments",
+    [   
+        ([("chr1", 0, 10, "+"), ("chr1", 9, 20, "+"), ("chr2", 0, 10, "+")], False,
+         align_tools.PairState.both, 3),
+        ([("chr1", 0, 10, "+"), ("chr1", 0, 10, "+"), ("chr1", 9, 20, "+"),
+          ("chr1", 9, 20, "+"), ("chr2", 0, 10, "+")], False,
+         align_tools.PairState.both, 10),
+        ([("chr1", 0, 10, "+"), ("chr1", 0, 10, "+"), ("chr1", 9, 20, "+"),
+          ("chr1", 9, 20, "+"), ("chr2", 0, 10, "+")], True,
+        align_tools.PairState.both, 4),
+        ([], False, None, None),
+        ([("chr2", 0, 10, "+")], False, align_tools.PairState.singleton, 1),
+        ],
+)
+def test_get_pairs(aligns,  direct, expected, expected_segments):
+    """Test get pairs."""
+    aligns = [align_from_tuple(t) for t in aligns]
+    pair_segments = align_tools.get_pairs(aligns, direct_only=direct)
+    if len(aligns) != 0:
+        count = 0
+        for i in pair_segments:
+            count += 1
+            assert i.state == expected
+        assert count == expected_segments
+    else:
+        assert next(pair_segments, None) == expected
+
+
+@pytest.mark.parametrize(
+    "expected",
+    [
+        ("pore-c-py")
+    ],
+)
+def test_update_header(expected):
+    """Test update header."""
+    header = align_tools.update_header(HEADER)
+    assert header['PG'][-1]['PN'] == expected
+
 
 # def test_short_walk(m1, caplog):
 #     """Test short walk."""
