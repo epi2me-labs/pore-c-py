@@ -72,38 +72,42 @@ class ChromunityWriter:
         self._writer = pq.ParquetWriter(str(self.path), self.schema)
         self.counter = 0
 
+    def _aln_to_record(self, aln):
+        return {
+            "cid": aln.get_tag("MI"),
+            "chrom": aln.reference_name,
+            "start": aln.reference_start,
+            "end": aln.reference_end,
+            "num_fragments": 1}
+
+    def get_pylist(self, aligns):
+        """Get pylist."""
+        pylist = list()
+        for block in align_tools.group_colinear(
+                [r for r in aligns],
+                tol=self.merge_distance):
+            if len(block) == 1:
+                if not block[0].is_unmapped:
+                    pylist.append(self._aln_to_record(block[0]))
+            else:
+                rec = self._aln_to_record(block[0])
+                rec["start"] = min(
+                    block[0].reference_start, block[-1].reference_start)
+                rec["end"] = max(
+                    block[0].reference_end, block[-1].reference_end)
+                rec["num_fragments"] = len(block)
+                pylist.append(rec)
+        return pylist
+
     def write(self, alignments: List[pysam.AlignedSegment]):
         """Write records."""
-
-        def _aln_to_record(aln):
-            return {
-                "cid": aln.get_tag(utils.CONCATEMER_ID_TAG),
-                "chrom": aln.reference_name,
-                "start": aln.reference_start,
-                "end": aln.reference_end,
-                "num_fragments": 1}
-
         pylist = list()
         if self.merge_distance is None:
             pylist = [
-                _aln_to_record(aln) for aln in alignments
+                self._aln_to_record(aln) for aln in alignments
                 if not aln.is_unmapped]
         else:
-            pylist = list()
-            for block in align_tools.group_colinear(
-                    [r.read_seq.align_info for r in alignments],
-                    tol=self.merge_distance):
-                if len(block) == 1:
-                    if not block[0].is_unmapped:
-                        pylist.append(_aln_to_record(block[0]))
-                else:
-                    rec = _aln_to_record(block[0])
-                    rec["start"] = min(
-                        block[0].reference_start, block[-1].reference_start)
-                    rec["end"] = max(
-                        block[0].reference_end, block[-1].reference_end)
-                    rec["num_fragments"] = len(block)
-                    pylist.append(rec)
+            pylist = self.get_pylist(alignments)
         if len(pylist) > 0:
             batch = pa.RecordBatch.from_pylist(pylist, schema=self.schema)
             self._writer.write_batch(batch)
