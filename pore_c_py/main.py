@@ -51,7 +51,7 @@ def porec_parser():
         formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     digest_parse.set_defaults(func=digest_bam)
     digest_parse.add_argument(
-        "input", type=Path,
+        "input", type=Path, default=[sys.stdin], nargs='*',
         help="An unaligned BAM file or FASTQ file or a directory of same")
     digest_parse.add_argument(
         "enzyme",
@@ -60,6 +60,13 @@ def porec_parser():
         "--output", type=Path, default=sys.stdout,
         help="An unaligned BAM file with a separate record for each monomer,"
         "default will write to standard out.")
+    digest_parse.add_argument(
+        "--header", type=Path,
+        help="The output bam requires a header."
+        "If INPUT parameter is stdin any existing headers will not be"
+        "accessible so optionally provide an existing bam that"
+        "contains headers to be copied to the output bam."
+        "Otherwise the header will be 'pore-c-py'.")
     digest_parse.add_argument(
         "--recursive", default=False, action="store_true",
         help=(
@@ -184,25 +191,44 @@ def porec_parser():
 
 
 def digest_bam(args):
-    """Digest entry point."""
+    """Digest entry point.
+
+    Read in concatemer sequences from unaligned bam or fastq.
+    Cuts each read with enzyme provided,
+    and tags with relevant concatemer info.
+    Outputs a bam containing each monomer sequence.
+    """
     logger = utils.get_named_logger("Digest")
     logger.info(f"Digesting concatemers from {args.input}.")
-    input_files = list(
-        utils.find_files(
-            args.input, glob=args.glob, recursive=args.recursive))
-    with pysam.AlignmentFile(
-            str(input_files[0]), "r", check_sq=False) as inputfile:
-        header = align_tools.update_header(inputfile.header)
+    # Default header will be pore-c-py.
+    # If input type is a file or directory, Header will be copied from that.
+    # If input type is stdin, there is an optional header parameter available
+    # to supply a preferred header present in an existing bam.
+    get_header = args.header
+    input_files = [args.input[0]]
+    input_mode = "rb"
+    pysam_kwargs = {"text": "pore-c-py"}
+    if sys.stdin not in args.input:
+        input_files = list(
+            utils.find_files(
+                args.input[0], glob=args.glob, recursive=args.recursive))
+        get_header = str(input_files[0])
+        input_mode = "r"
+    if args.header or sys.stdin not in args.input:
+        with pysam.AlignmentFile(
+                get_header, input_mode, check_sq=False) as inputfile:
+            header = align_tools.update_header(inputfile.header)
+        pysam_kwargs = {"header": header}
     mode = "wb"
     if (args.output is not sys.stdout) and \
             (not utils.stdout_is_regular_file()):
         mode = "wb0"
     with pysam.AlignmentFile(
-            args.output, header=header,
-            threads=args.threads, mode=mode) as outbam:
+            args.output,
+            threads=args.threads, mode=mode, **pysam_kwargs) as outbam:
         for input_file in input_files:
             with pysam.AlignmentFile(
-                    str(input_file), "r", check_sq=False) as inputfile:
+                    input_file, input_mode, check_sq=False) as inputfile:
                 for monomer in digest.get_concatemer_seqs(
                     inputfile, enzyme=args.enzyme,
                         remove_tags=args.remove_tags):
