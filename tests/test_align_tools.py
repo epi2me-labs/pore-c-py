@@ -4,14 +4,14 @@ import pytest
 
 from pore_c_py import align_tools
 
-HEADER = pysam.AlignmentHeader.from_references(
-    ["chr1", "chr2"], [1000, 2000])
 
+HEADER = pysam.AlignmentHeader.from_references(
+    ["chr1", "chr2", "*"], [1000, 2000, 3000])
 
 def align_from_tuple(t):
     """Align from tuple."""
     rec = pysam.AlignedSegment(header=HEADER)
-    rec.reference_id = ["chr1", "chr2"].index(t[0])
+    rec.reference_id = ["chr1", "chr2", "*"].index(t[0])
     rec.reference_start = t[1]
     rec.query_sequence = "A" * (t[2] - t[1])
     rec.cigartuples = [(pysam.CMATCH, (t[2] - t[1]))]
