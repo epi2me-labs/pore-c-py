@@ -163,8 +163,10 @@ def is_colinear(
 def group_colinear(
         aligns: List[pysam.AlignedSegment], tol=0):
     """Group alignments into co-linear blocks."""
-    if len(aligns) < 2:
-        return [list(range(len(aligns)))]
+    if len(aligns) == 0:
+        return []  # an empty list of blocks
+    elif len(aligns) == 1:
+        return [aligns]  # one block with single alignment
     res = []
     block = []
     last = aligns[0]
