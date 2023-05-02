@@ -1,0 +1,8 @@
+[run]
+omit = pore_c_py/main.py 
+
+[report]
+exclude_lines =
+    pragma: no cover
+    raise NotImplementedError
+fail_under = 55
