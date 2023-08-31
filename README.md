@@ -11,7 +11,7 @@ pip install pore-c-py
 ```
 Or via conda:
 ```
-conda install -c epi2me-labs pore-c-py
+conda install -c nanoporetech pore-c-py
 ```
 
 ## Usage
