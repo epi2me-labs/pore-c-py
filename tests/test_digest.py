@@ -135,4 +135,21 @@ def test_digest_sequence(align, sequence, enzyme, expected):
     enz = digest.get_enzyme(enzyme)
     seqs = digest.digest_sequence(aln, enz)
     for i, gen in enumerate(seqs):
+        assert gen.get_tag("EZ") == enzyme
+        assert gen.query_sequence == expected[i]
+
+
+@pytest.mark.parametrize(
+        "align, sequence, enzyme, expected",
+    [
+        (("chr1", 0, 28, "+"), 'AAAATGTTTAAAAAAAAAAGGCATGAAA', ['AAAAAAAAAA', 'TTTTTTTTTT', 'CCCCCCCCCC', 'GGGGGGGGGG'],
+         ['AAAATGTTTAAAAAAAAAA', 'GGCATGAAA'])
+    ],
+
+)
+def test_digest_barcodes(align, sequence, enzyme, expected):
+    aln = align_with_sequence(align, query_sequence=sequence)
+    seqs = digest.digest_sequence(aln, enzyme)
+    for i, gen in enumerate(seqs):
+        assert gen.get_tag("EZ") == "AAAAAAAAAA"
         assert gen.query_sequence == expected[i]

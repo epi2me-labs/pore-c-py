@@ -1,6 +1,7 @@
 """Digestion of unaligned concatemers."""
 import copy
-
+import os
+import re
 from Bio import Restriction
 from Bio.Seq import Seq
 
@@ -93,9 +94,21 @@ def digest_sequence(align, enzyme, tags_remove=None):
     # it or handle it in trimming, so force its removal by default.
     if tags_remove is None:
         tags_remove = {'mv'}
-
     concatemer_id = align.query_name
-    cut_points = [x - 1 for x in enzyme.search(Seq(align.query_sequence))]
+    if isinstance(enzyme, list):
+        for i in enzyme:
+            cut_points = []
+            if i in align.query_sequence:
+                the_enzyme = i
+                for m in re.finditer(i, align.query_sequence):
+                    cut_points.append(m.end())
+                logger.info(str(the_enzyme)+':'+str(cut_points))
+                
+                break
+    else:
+        cut_points = [x - 1 for x in enzyme.search(Seq(align.query_sequence))]
+        the_enzyme = str(enzyme)
+    logger.info(cut_points)
     read_length = len(align.query_sequence)
     num_digits = len(str(read_length))
     intervals = splits_to_intervals(cut_points, read_length)
@@ -128,6 +141,7 @@ def digest_sequence(align, enzyme, tags_remove=None):
         read.set_tag(
             utils.MONOMER_DATA_TAG,
             [start, end, read_length, idx, num_intervals])
+        read.set_tag("EZ",the_enzyme)
         utils.MonomerData.set_monomer_data(
                 read, start, end, read_length, idx, num_intervals)
         read.set_tag(utils.CONCATEMER_ID_TAG, concatemer_id, "Z")
@@ -148,7 +162,17 @@ def get_concatemer_seqs(input_file, enzyme, remove_tags=None):
     logger.info(f"Digesting unaligned sequences from {input_file}")
     n_concatemers = 0
     n_monomers = 0
-    enzyme = get_enzyme(enzyme)
+    import sys
+    if os.path.isfile(enzyme):
+        with open(enzyme) as f:
+            cutters = f.read().split('\n')
+            list_of_cutters = cutters
+        enzyme = list_of_cutters
+        #enzyme = get_enzyme("NlaIII")
+        logger.info(enzyme)
+
+    else: 
+        enzyme = get_enzyme(enzyme)
     tags_remove = {"mv"}
     if remove_tags:
         tags_remove.update(set(remove_tags))

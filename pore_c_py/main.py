@@ -9,7 +9,7 @@ import time
 
 import pysam
 
-from pore_c_py import align_tools, annotate, digest, utils, writers
+import align_tools, annotate, digest, utils, writers
 
 
 def porec_parser():
@@ -55,7 +55,12 @@ def porec_parser():
         help="An unaligned BAM file or FASTQ file or a directory of same")
     digest_parse.add_argument(
         "enzyme",
-        help="A restriction enzyme name eg. NlaIII")
+        help="A restriction enzyme name eg. NlaIII or a file with a list of sequences you would like to split on.")
+    digest_parse.add_argument(
+        "--digest_sequences",
+        type=Path,
+        help="A file with a list of digest sequences to search for."
+    )
     digest_parse.add_argument(
         "--output", type=Path, default=sys.stdout,
         help="An unaligned BAM file with a separate record for each monomer,"
@@ -380,3 +385,6 @@ def run_main():
         logger.addHandler(fh)
 
     args.func(args)
+
+if __name__ == "__main__":
+    run_main()
