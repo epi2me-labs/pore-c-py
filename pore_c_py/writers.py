@@ -65,20 +65,24 @@ class ChromunityWriter:
         self.merge_distance = merge_distance
         self.schema = pa.schema([
             ("cid", pa.string()),
+            ("read_name", pa.string()),
             ("chrom", pa.string()),
             ("start", pa.uint32()),
             ("end", pa.uint32()),
-            ("num_fragments", pa.uint32())])
+            ("num_fragments", pa.uint32()),
+            ("pass_filter", pa.string())])
         self._writer = pq.ParquetWriter(str(self.path), self.schema)
         self.counter = 0
 
     def _aln_to_record(self, aln):
         return {
             "cid": aln.get_tag("MI"),
+            "read_name": aln.get_tag("MI"),
             "chrom": aln.reference_name,
             "start": aln.reference_start,
             "end": aln.reference_end,
-            "num_fragments": 1}
+            "num_fragments": 1,
+            "pass_filter": "TRUE"}
 
     def get_pylist(self, aligns):
         """Get pylist."""
