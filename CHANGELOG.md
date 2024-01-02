@@ -4,6 +4,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.1.0]
+### Added
+- Option `max_monomers` to `digest` command to remove reads containing more
+  than max monomers. Excluded reads can be output to second BAM file and/or
+  a text file of read names.
+### Removed
+- `--max_reads` argument from `digest` command, as it was non-functional. 
+
 ## [v2.0.6]
 ### Fixed
 - Chromunity parquet file output contains columns required for use with Chromunity.

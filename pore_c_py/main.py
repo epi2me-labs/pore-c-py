@@ -76,11 +76,17 @@ def porec_parser():
         "--glob", default="*.bam",
         help="If INPUT is a directory use this glob to search for files")
     digest_parse.add_argument(
-        "--max_reads", type=int, default=0,  # should be inf?
-        help="Take the first n reads (useful for testing)")
-    digest_parse.add_argument(
         "--remove_tags", nargs="+", default=list(),
         help="Optionally remove SAM tags from input")
+    digest_parse.add_argument(
+        "--max_monomers", type=int, default=None,
+        help="Maximum number of monomers for a read to be included in output.")
+    digest_parse.add_argument(
+        "--excluded_list", type=Path, default=None,
+        help="File output to write list of excluded reads.")
+    digest_parse.add_argument(
+        "--excluded_bam", type=Path, default=None,
+        help="BAM output to write excluded reads.")
     digest_parse.add_argument(
         "--threads", default=1, type=int,
         help="Compute threads of bam compression.")
@@ -223,16 +229,36 @@ def digest_bam(args):
     if (args.output is not sys.stdout) and \
             (not utils.stdout_is_regular_file()):
         mode = "wb0"
-    with pysam.AlignmentFile(
-            args.output,
-            threads=args.threads, mode=mode, **pysam_kwargs) as outbam:
+    with contextlib.ExitStack() as manager:
+        outbam = pysam.AlignmentFile(
+                args.output,
+                threads=args.threads, mode=mode, **pysam_kwargs)
+        manager.enter_context(outbam)
+        excl_list = None
+        if args.excluded_list is not None:
+            excl_list = open(args.excluded_list, 'w')
+            manager.enter_context(excl_list)
+        excl_bam = None
+        if args.excluded_bam is not None:
+            excl_bam = pysam.AlignmentFile(
+                args.excluded_bam,
+                threads=args.threads, mode='w', **pysam_kwargs)
+            manager.enter_context(excl_bam)
+
         for input_file in input_files:
             with pysam.AlignmentFile(
                     input_file, input_mode, check_sq=False) as inputfile:
-                for monomer in digest.get_concatemer_seqs(
+                for is_monomer, read in digest.get_concatemer_seqs(
                     inputfile, enzyme=args.enzyme,
-                        remove_tags=args.remove_tags):
-                    outbam.write(monomer)
+                        remove_tags=args.remove_tags,
+                        max_monomers=args.max_monomers):
+                    if is_monomer:
+                        outbam.write(read)
+                    else:
+                        if excl_list is not None:
+                            excl_list.write(f"{read.query_name}\n")
+                        if excl_bam is not None:
+                            excl_bam.write(read)
     logger.info("Finished digestion.")
 
 

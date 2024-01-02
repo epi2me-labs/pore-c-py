@@ -87,19 +87,34 @@ def get_enzyme(enzyme):
     return enz
 
 
-def digest_sequence(align, enzyme, tags_remove=None):
-    """Digest sequence."""
+def digest_sequence(align, enzyme, remove_tags=None, max_monomers=None):
+    """Digest sequence.
+
+    :param align: a pysam alignment.
+    :param enzyme: biopython enzyme instance.
+    :param remove_tags: set of tags to remove from alignment records.
+    :param max_monomers: Maximum number of monomers for a read to be included
+       in output.
+    """
     # the move tag massively bloats files, and we don't care for
     # it or handle it in trimming, so force its removal by default.
-    if tags_remove is None:
-        tags_remove = {'mv'}
-
+    if remove_tags is None:
+        remove_tags = {'mv'}
+    if max_monomers is None:
+        max_monomers = float('inf')
     concatemer_id = align.query_name
     cut_points = [x - 1 for x in enzyme.search(Seq(align.query_sequence))]
     read_length = len(align.query_sequence)
     num_digits = len(str(read_length))
     intervals = splits_to_intervals(cut_points, read_length)
     num_intervals = len(intervals)
+    if num_intervals > max_monomers:
+        # Quick return. We do this here and not a higher level to avoid making
+        # lots of monomers below, which then would be discarded later.
+        logger.warning(
+            f"Dropping read {concatemer_id}, has {num_intervals} monomers.")
+        yield False, copy.copy(align)
+        return
 
     for idx, (start, end) in enumerate(intervals):
         read = copy.copy(align)
@@ -111,7 +126,7 @@ def digest_sequence(align, enzyme, tags_remove=None):
         read.query_sequence = seq
         read.query_qualities = qual
         # deal with mods, upgrading tag from interim to approved spec
-        if ('Mm' in tags_remove) or ('MM' in tags_remove):
+        if ('Mm' in remove_tags) or ('MM' in remove_tags):
             # Setting to None effectively deletes,
             # or does nothing if not present
             for tag in ('Mm', 'Ml', 'MM', 'ML'):
@@ -131,16 +146,19 @@ def digest_sequence(align, enzyme, tags_remove=None):
         utils.MonomerData.set_monomer_data(
                 read, start, end, read_length, idx, num_intervals)
         read.set_tag(utils.CONCATEMER_ID_TAG, concatemer_id, "Z")
-        yield read
+        yield True, read
 
 
-def get_concatemer_seqs(input_file, enzyme, remove_tags=None):
+def get_concatemer_seqs(
+        input_file, enzyme, remove_tags=None, max_monomers=None):
     """Digest concatemers in to unaligned monomers.
 
     :param input_file: pysam.AlignmentFile input
     :param enzyme: Name of the digestion enzyme used in sample preperation
     :param remove_tags: Comma seperated list of additional
-                        tags to remove from file
+        tags to remove from file
+    :param max_monomers: Maximum number of monomers for a read to be included
+       in output.
 
     Concatemers are split with chosen digestion enzyme in to monomers.
     Monomers are tagged with unique monomer id and concatemer info.
@@ -148,16 +166,23 @@ def get_concatemer_seqs(input_file, enzyme, remove_tags=None):
     logger.info(f"Digesting unaligned sequences from {input_file}")
     n_concatemers = 0
     n_monomers = 0
+    n_excluded = 0
     enzyme = get_enzyme(enzyme)
     tags_remove = {"mv"}
     if remove_tags:
         tags_remove.update(set(remove_tags))
+    remove_tags = tags_remove
     for align in input_file.fetch(until_eof=True):
         n_concatemers += 1
         reads = digest_sequence(
-            align, enzyme, tags_remove)
-        for read in reads:
-            n_monomers += 1
-            yield read
+            align, enzyme, remove_tags=remove_tags, max_monomers=max_monomers)
+        for monomer, read in reads:
+            if monomer:
+                n_monomers += 1
+            else:
+                n_excluded += 1
+            yield monomer, read
     logger.info(
         f"Found {n_monomers} monomers in {n_concatemers} concatemers.")
+    logger.info(
+        f"Excluded {n_excluded} concatemers.")

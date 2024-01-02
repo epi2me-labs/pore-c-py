@@ -134,5 +134,6 @@ def test_digest_sequence(align, sequence, enzyme, expected):
     aln = align_with_sequence(align, query_sequence=sequence)
     enz = digest.get_enzyme(enzyme)
     seqs = digest.digest_sequence(aln, enz)
-    for i, gen in enumerate(seqs):
+    for i, (monomer, gen) in enumerate(seqs):
+        assert monomer
         assert gen.query_sequence == expected[i]
