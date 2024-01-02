@@ -5,4 +5,4 @@ omit = pore_c_py/main.py
 exclude_lines =
     pragma: no cover
     raise NotImplementedError
-fail_under = 55
+fail_under = 80
