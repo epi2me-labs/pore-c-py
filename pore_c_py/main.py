@@ -108,8 +108,8 @@ def porec_parser():
         "output_prefix", type=Path,
         help="Output files will share this prefix")
     annotate_parse.add_argument(
-        "--stdout", default=False,
-        help="If True output name sorted bam to stdout")
+        "--stdout", default=False, action="store_true",
+        help="Output to stdout")
     annotate_parse.add_argument(
         "--threads", default=1, type=int,
         help="Compute threads of bam compression.")
