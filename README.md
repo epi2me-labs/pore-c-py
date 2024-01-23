@@ -39,3 +39,23 @@ pore-c-py digest <input concatemers bam> <restriction enzyme> <output monomers b
 pore-c-py annotate <input bam> <output bam file name>
 ```
 
+*Complete workflow with alignment of monomers and outputting files for downstream tools:*
+```
+INPUT="myreads.bam"
+ENZYME="NlaIII"
+REF="myref.fasta"
+OUTPUT="all"
+
+pore-c-py digest "${INPUT}" "${ENZYME}" \
+    | samtools fastq -T '*' \
+    | minimap2 -ay -t 8 -x map-ont "${REF}" - \
+    | pore-c-py annotate - "${OUTPUT}" --monomers --stdout --summary --chromunity \
+    | tee "${OUTPUT}.ns.bam" \
+    | samtools sort --write-index -o "${OUTPUT}.cs.bam" -
+samtools index "${OUTPUT}.ns.bam"
+```
+
+The `digest` program can read its input from standard input, so it can be used with
+[bamindex](https://github.com/epi2me-labs/fastcat?tab=readme-ov-file#bamindex) in
+order to process a subset of a file. This is particularly useful for
+distributing the workload on a cluster.
