@@ -76,7 +76,7 @@ def porec_parser():
         "--glob", default="*.bam",
         help="If INPUT is a directory use this glob to search for files")
     digest_parse.add_argument(
-        "--remove_tags", nargs="+", default=list(),
+        "--remove_tags", nargs="+", default=set(),
         help="Optionally remove SAM tags from input")
     digest_parse.add_argument(
         "--max_monomers", type=int, default=None,

@@ -96,12 +96,19 @@ def digest_sequence(align, enzyme, remove_tags=None, max_monomers=None):
     :param max_monomers: Maximum number of monomers for a read to be included
        in output.
     """
+    if max_monomers is None:
+        max_monomers = float('inf')
     # the move tag massively bloats files, and we don't care for
     # it or handle it in trimming, so force its removal by default.
     if remove_tags is None:
-        remove_tags = {'mv'}
-    if max_monomers is None:
-        max_monomers = float('inf')
+        remove_tags = set()
+    else:
+        remove_tags = set(remove_tags)
+    remove_tags.add('mv')
+    for tag in remove_tags:
+        if align.has_tag(tag):
+            align.set_tag(tag, None)
+
     concatemer_id = align.query_name
     cut_points = [x - 1 for x in enzyme.search(Seq(align.query_sequence))]
     read_length = len(align.query_sequence)
