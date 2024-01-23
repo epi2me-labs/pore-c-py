@@ -1,15 +1,16 @@
 # Pore_c_py
-This package provides python scripts for working with Pore-C data
-
-Use `--help` with to find detailed usage instructions.
+This package provides Python scripts for working with Pore-C data. It
+is not intended to be used directly by end uses, but rather as part of
+our Nextflow workflow [wf-pore-c](https://github.com/epi2me-labs/wf-pore-c).
+Hence the terse nature of this documentation.
 
 ## Installation
 
-Via pip:
+A package is available to install through either `pip`:
 ```
 pip install pore-c-py
 ```
-Or via conda:
+or through conda:
 ```
 conda install -c nanoporetech pore-c-py
 ```
@@ -27,19 +28,11 @@ Available subcommands are:
                  concatemer.
 ```
 
-### Examples
+### Example
 
-*Digest concatemer sequences in to monomers:*
-```
-pore-c-py digest <input concatemers bam> <restriction enzyme> <output monomers bam file name>
-```
+The following is indicative use, similar to that performed by
+[wf-pore-c](https://github.com/epi2me-labs/wf-pore-c).
 
-*Parse a bam of aligned monomers:*
-```
-pore-c-py annotate <input bam> <output bam file name>
-```
-
-*Complete workflow with alignment of monomers and outputting files for downstream tools:*
 ```
 INPUT="myreads.bam"
 ENZYME="NlaIII"

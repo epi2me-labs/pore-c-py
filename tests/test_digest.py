@@ -137,3 +137,24 @@ def test_digest_sequence(align, sequence, enzyme, expected):
     for i, (monomer, gen) in enumerate(seqs):
         assert monomer
         assert gen.query_sequence == expected[i]
+
+
+@pytest.mark.parametrize(
+    "align, sequence, enzyme",
+    [
+        (("chr1", 0, 19, "+"), 'AAACATGTTTGGCATGAAA', "NlaIII"),
+    ],
+)
+def test_remove_mv_tag(align, sequence, enzyme):
+    aln = align_with_sequence(align, query_sequence=sequence)
+    aln.set_tag('mv', [0,1,0,1,0,1])
+    enz = digest.get_enzyme(enzyme)
+    seqs = digest.digest_sequence(aln, enz)
+    for (monomer, gen) in seqs:
+        assert not gen.has_tag('mv')
+
+    # check also we don't blow up removing tag that doesn't exist
+    seqs = digest.digest_sequence(aln, enz, remove_tags={'thing'})
+    for (monomer, gen) in seqs:
+        assert not gen.has_tag('mv')
+
