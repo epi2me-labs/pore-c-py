@@ -18,7 +18,6 @@ test: venv/bin/activate
 	${IN_VENV} && flake8 ${PROJECT} \
 		--import-order-style google --application-import-names ${PROJECT} \
 		--statistics
-	# demo should run without error
 	${IN_VENV} && python setup.py install
 	${IN_VENV} && pytest tests --cov pore_c_py \
 		--cov-report html --cov-report term --cov-report term-missing
