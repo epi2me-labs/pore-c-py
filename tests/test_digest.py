@@ -1,4 +1,5 @@
 """Test functions from digest."""
+import array
 import copy
 
 import pysam
@@ -108,8 +109,7 @@ def test_get_subread_modified_bases(
     read = copy.copy(aln)
     mm, ml = digest.get_subread_modified_bases(aln, start, end)
     read.set_tag("Mm", mm)
-    parse_ml = list(map(int, ml[:-1].split(',')))
-    read.set_tag("Ml", parse_ml)
+    read.set_tag("Ml", ml)
 
     # original with expected tags
     expected_aln = align_with_sequence(aln_tuple, query_sequence=qseq, name="*")
@@ -119,6 +119,11 @@ def test_get_subread_modified_bases(
     # compare
     for k, v in read.modified_bases.items():
         assert expected_aln.modified_bases[k] == v
+
+    # check that ML tag is a byte array
+    assert isinstance(read.get_tag("Ml"), array)
+    found = sum(x.startswith('Ml:B:C') for x in read.to_dict()["tags"])
+    assert found == 1
 
 
 @pytest.mark.parametrize(

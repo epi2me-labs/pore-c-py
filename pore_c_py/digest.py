@@ -1,4 +1,5 @@
 """Digestion of unaligned concatemers."""
+import array
 import copy
 
 from Bio import Restriction
@@ -17,7 +18,9 @@ def get_subread_modified_bases(align, start, end):
     :param start: start coordinate to trim to.
     :param end: exclusive end co-ordinate.
     """
-    mm_str, ml_str = "", ""
+    # we use and array here since thats what pysam uses for the tag,
+    # so might be a bit faster than an intermediate list.
+    mm_str, ml_arr = "", array.array('B')
     base_indices = {}
     seq = align.query_sequence[start:end]
     for mod_key, mod_data in align.modified_bases.items():
@@ -43,23 +46,20 @@ def get_subread_modified_bases(align, start, end):
         strand = "+" if strand == 0 else "-"
         deltas = []
         counter = 0
-        probs = []
         for seq_idx in base_indices[canonical_base]:
             orig_idx = seq_idx + start
             if orig_idx in base_offsets:  # is modified
-                probs += [probs_dic[orig_idx]]
+                ml_arr.append(probs_dic[orig_idx])
                 deltas.append(str(counter))
                 counter = 0
             else:
                 counter += 1
             deltas_formatted = ','.join(deltas)
-            prob_str = ",".join(map(str, probs))
         mm_str += (
                 f"{canonical_base}{strand}{mod_type}{skip_scheme}"
                 f",{deltas_formatted};"
             )
-        ml_str += f"{prob_str},"
-    return mm_str, ml_str
+    return mm_str, ml_arr
 
 
 def splits_to_intervals(positions, length):
@@ -142,8 +142,12 @@ def digest_sequence(align, enzyme, remove_tags=None, max_monomers=None):
             mm, ml = get_subread_modified_bases(align, start, end)
             for tag in ('Mm', 'Ml'):
                 read.set_tag(tag, None)
-            read.set_tag("MM", mm)
-            read.set_tag("ML", ml)
+            if len(ml) == 0:
+                logger.info(
+                    f"Read {concatemer_id} has no modified bases.")
+            else:
+                read.set_tag("MM", mm)
+                read.set_tag("ML", ml)
         # lexograpically sortable monomer ID
         read.query_name = \
             f"{concatemer_id}:{start:0{num_digits}d}:{end:0{num_digits}d}"
