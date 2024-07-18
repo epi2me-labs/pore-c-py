@@ -4,9 +4,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.1.4]
+### Fixed
+- MN tag is now amended when monomer records are created.
+### Added
+- All potential minimap2 SAM tags are removed from input records before processing.
+
 ## [v2.1.3]
-### Changed
-- ML tag is now correctly a byte array tag.
+### Fixed
+- Output ML tag is now correctly a byte array tag.
 
 ## [v2.1.2]
 ### Added
