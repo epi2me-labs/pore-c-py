@@ -98,15 +98,31 @@ def digest_sequence(align, enzyme, remove_tags=None, max_monomers=None):
     """
     if max_monomers is None:
         max_monomers = float('inf')
-    # the move tag massively bloats files, and we don't care for
-    # it or handle it in trimming, so force its removal by default.
     if remove_tags is None:
         remove_tags = set()
     else:
         remove_tags = set(remove_tags)
-    remove_tags.add('mv')
+
+    # build a set of tags to always remove regardless of the input.
+    # This is everything produce by minimap2 plus the move 'mv'
+    # from basecaller which is massive and not handled in trimming
+    hardlist = {
+        'tp', 'cm', 's1', 's2',
+        'NM', 'MD', 'AS', 'SA',
+        'ms', 'nn', 'ts', 'cg',
+        'cs', 'dv', 'de', 'rl',
+        'mv'}
+    remove_tags.update(hardlist)
+    # delete all mod tags if any were subject to deletion
+    keep_mods = True
+    mod_tags = {'Mm', 'Ml', 'MM', 'ML', 'Mn', 'MN'}
+    if remove_tags & mod_tags:
+        keep_mods = False
+        remove_tags.update(mod_tags)
+
+    # now actually remove stuff!
     for tag in remove_tags:
-        if align.has_tag(tag):
+        if align.has_tag(tag):  # set tag doesn't like invalid tag codes
             align.set_tag(tag, None)
 
     concatemer_id = align.query_name
@@ -133,14 +149,9 @@ def digest_sequence(align, enzyme, remove_tags=None, max_monomers=None):
         read.query_sequence = seq
         read.query_qualities = qual
         # deal with mods, upgrading tag from interim to approved spec
-        if ('Mm' in remove_tags) or ('MM' in remove_tags):
-            # Setting to None effectively deletes,
-            # or does nothing if not present
-            for tag in ('Mm', 'Ml', 'MM', 'ML'):
-                read.set_tag(tag, None)
-        else:
+        if keep_mods:
             mm, ml = get_subread_modified_bases(align, start, end)
-            for tag in ('Mm', 'Ml'):
+            for tag in ('Mm', 'Ml', 'Mn'):
                 read.set_tag(tag, None)
             if len(ml) == 0:
                 logger.info(
@@ -148,6 +159,7 @@ def digest_sequence(align, enzyme, remove_tags=None, max_monomers=None):
             else:
                 read.set_tag("MM", mm)
                 read.set_tag("ML", ml)
+                read.set_tag("MN", len(seq))
         # lexograpically sortable monomer ID
         read.query_name = \
             f"{concatemer_id}:{start:0{num_digits}d}:{end:0{num_digits}d}"
