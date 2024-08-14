@@ -151,8 +151,11 @@ def digest_sequence(align, enzyme, remove_tags=None, max_monomers=None):
         # deal with mods, upgrading tag from interim to approved spec
         if keep_mods:
             mm, ml = get_subread_modified_bases(align, start, end)
-            for tag in ('Mm', 'Ml', 'Mn'):
-                read.set_tag(tag, None)
+            # if keep mods reset any potential mod tags
+            # for monomers that have no modified bases
+            for tag in mod_tags:
+                if read.has_tag(tag):  # set tag doesn't like invalid tag codes
+                    read.set_tag(tag, None)
             if len(ml) == 0:
                 logger.info(
                     f"Read {concatemer_id} has no modified bases.")
