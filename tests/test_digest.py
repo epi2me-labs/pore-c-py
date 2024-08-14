@@ -145,6 +145,52 @@ def test_digest_sequence(align, sequence, enzyme, expected):
 
 
 @pytest.mark.parametrize(
+    "align, sequence, MM, ML, expected_MN, expected_ML, expected_MM",
+    [(
+         ("*", 0, 43, "+"),
+         "AGCACTCCAGAGTCGNACGCCATYCGCGCGCCACCACATGTTT",
+         "C+m,2,2,1,4,1;C+76792,6,7;N+n,15,2;",
+         [102,128,153,179,204,161,187,212,169],
+         [40, 0], 
+         [[102, 128, 153, 179, 204, 212, 169, 161, 187]],
+         ['C+m,2,2,1,4,1;N+n,15,2;C+76792,6,7;']),
+     (
+         ("*", 0, 43, "+"),
+         "AGCACTCCAGAGTCGNACGCCATYCGCGCGCCACCACATGTTC",
+         "C+m,2,2,1,4,1,1;C+76792,6,7;N+n,15,2;",
+         [102,128,153,179,204,161,187,212,169,100],
+         [40, 3],
+         [[102, 128, 153, 179, 204, 169, 100, 187, 212],
+          [161]],
+         ['C+m,2,2,1,4,1;N+n,15,2;C+76792,6,7;', 'C+m,0;'])
+    ],
+)
+def test_digest_sequence_mods(align, sequence, MM, ML, expected_MN, expected_ML, expected_MM):
+    # Create aln
+    aln = align_with_sequence(align, query_sequence=sequence)
+    aln.set_tag("MN", len(sequence))
+    aln.set_tag("Mn", len(sequence))
+    aln.set_tag("Ml", ML)
+    aln.set_tag("Mm", MM)
+
+    # Get digested with modified bases
+    enz = digest.get_enzyme("NlaIII")
+    seqs = digest.digest_sequence(aln, enz)
+ 
+    # Compare 
+    for i, (monomer, gen) in enumerate(seqs):
+        assert gen.has_tag("Mn") == False
+        if gen.has_tag("MN"):
+            assert gen.get_tag("MN") == expected_MN[i]
+            assert gen.get_tag("ML") == array('B', expected_ML[i])
+            assert gen.get_tag("MM") == expected_MM[i]
+        else:
+            assert gen.has_tag("MN") == False
+        
+        
+
+
+@pytest.mark.parametrize(
     "align, sequence, enzyme",
     [
         (("chr1", 0, 19, "+"), 'AAACATGTTTGGCATGAAA', "NlaIII"),
